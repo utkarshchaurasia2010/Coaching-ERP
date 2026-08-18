@@ -49,7 +49,7 @@ export default function DashboardPage() {
             .order('enrollment_date', { ascending: false })
             .limit(5),
           supabase.from('transactions').select('amount_paid').eq('academic_year', settings.academic_year),
-          supabase.from('schedules').select('day_of_week, start_time, end_time, subjects(name), batches(name)').eq('academic_year', settings.academic_year)
+          supabase.from('schedules').select('id, day_of_week, is_recurring, specific_date, start_time, end_time, subjects(name), batches(name)').eq('academic_year', settings.academic_year)
         ]);
 
         const totalRevenue = (transactionsData || []).reduce((sum, t) => sum + Number(t.amount_paid), 0);
@@ -64,22 +64,43 @@ export default function DashboardPage() {
         if (recentData) setRecentEnrollments(recentData);
         if (scheduleData) {
           const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-          const currentDayIdx = new Date().getDay();
-          const currentTime = new Date().toLocaleTimeString('en-GB', { hour12: false });
-          
-          const sorted = [...scheduleData].sort((a, b) => {
-            const dayA = daysOfWeek.indexOf(a.day_of_week);
-            const dayB = daysOfWeek.indexOf(b.day_of_week);
-            let daysUntilA = dayA - currentDayIdx;
-            if (daysUntilA < 0 || (daysUntilA === 0 && a.start_time < currentTime)) daysUntilA += 7;
-            let daysUntilB = dayB - currentDayIdx;
-            if (daysUntilB < 0 || (daysUntilB === 0 && b.start_time < currentTime)) daysUntilB += 7;
-            
-            if (daysUntilA !== daysUntilB) return daysUntilA - daysUntilB;
+          const now = new Date();
+          const todayIso = now.toISOString().split('T')[0];
+          const currentDayIdx = now.getDay();
+          const currentTime = now.toLocaleTimeString('en-GB', { hour12: false });
+
+          // Map items with a calculated upcoming sort timestamp / days delta
+          const formatted = scheduleData.map(item => {
+            const isRecurring = item.is_recurring !== false;
+            let daysUntil = 0;
+            let isValid = true;
+
+            if (isRecurring) {
+              const dayIdx = daysOfWeek.indexOf(item.day_of_week);
+              daysUntil = dayIdx - currentDayIdx;
+              if (daysUntil < 0 || (daysUntil === 0 && item.start_time < currentTime)) {
+                daysUntil += 7;
+              }
+            } else if (item.specific_date) {
+              const classDate = new Date(item.specific_date + 'T00:00:00');
+              const todayDate = new Date(todayIso + 'T00:00:00');
+              const diffTime = classDate.getTime() - todayDate.getTime();
+              daysUntil = Math.round(diffTime / (1000 * 60 * 60 * 24));
+              
+              if (daysUntil < 0 || (daysUntil === 0 && item.start_time < currentTime)) {
+                isValid = false; // already passed
+              }
+            }
+
+            return { ...item, daysUntil, isValid };
+          }).filter(item => item.isValid);
+
+          formatted.sort((a, b) => {
+            if (a.daysUntil !== b.daysUntil) return a.daysUntil - b.daysUntil;
             return a.start_time.localeCompare(b.start_time);
           });
           
-          setUpcomingClasses(sorted.slice(0, 5));
+          setUpcomingClasses(formatted.slice(0, 5));
         }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
@@ -165,21 +186,32 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {upcomingClasses.length === 0 ? (
               <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No upcoming classes scheduled.</div>
-            ) : upcomingClasses.map((cls, i) => (
-              <div key={i} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                <div style={{ 
-                  width: '4px', 
-                  height: '40px', 
-                  background: 'var(--accent)', 
-                  borderRadius: '4px',
-                  marginTop: '0.25rem'
-                }} />
-                <div>
-                  <div style={{ fontWeight: 500 }}>{cls.subjects?.name || 'Subject'}</div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{cls.day_of_week.substring(0, 3)} • {cls.start_time.slice(0, 5)} • {cls.batches?.name || 'Batch'}</div>
+            ) : upcomingClasses.map((cls, i) => {
+              const isRecurring = cls.is_recurring !== false;
+              const dateBadge = isRecurring ? `Every ${cls.day_of_week.substring(0, 3)}` : (cls.specific_date ? new Date(cls.specific_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : cls.day_of_week.substring(0, 3));
+              return (
+                <div key={i} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                  <div style={{ 
+                    width: '4px', 
+                    height: '40px', 
+                    background: isRecurring ? 'var(--accent)' : '#f59e0b', 
+                    borderRadius: '4px',
+                    marginTop: '0.25rem'
+                  }} />
+                  <div>
+                    <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>{cls.subjects?.name || 'Subject'}</span>
+                      <span style={{ fontSize: '0.75rem', color: isRecurring ? 'var(--primary)' : '#d97706', background: isRecurring ? 'rgba(59, 130, 246, 0.08)' : 'rgba(245, 158, 11, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                        {dateBadge}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                      {cls.start_time.slice(0, 5)} - {cls.end_time.slice(0, 5)} • {cls.batches?.name || 'Batch'}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

@@ -100,6 +100,19 @@ export default function StudentsPage() {
     }
 
     try {
+      // 1. Delete dependent records first (to satisfy foreign key constraints)
+      await supabase.from('enrollments').delete().eq('student_id', studentToDelete);
+      await supabase.from('exam_results').delete().eq('student_id', studentToDelete);
+      
+      // 2. Delete transactions related to the student's fees, then the fees
+      const { data: studentFees } = await supabase.from('fees').select('id').eq('student_id', studentToDelete);
+      if (studentFees && studentFees.length > 0) {
+        const feeIds = studentFees.map((f: any) => f.id);
+        await supabase.from('transactions').delete().in('fee_id', feeIds);
+        await supabase.from('fees').delete().eq('student_id', studentToDelete);
+      }
+
+      // 3. Finally delete the student
       const { error } = await supabase
         .from('students')
         .delete()
@@ -109,9 +122,9 @@ export default function StudentsPage() {
       
       setStudents(students.filter(s => s.id !== studentToDelete));
       setDeleteModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting student:', error);
-      setDeleteError("Failed to delete student from database.");
+      setDeleteError("Failed to delete student from database: " + error.message);
     }
   };
 

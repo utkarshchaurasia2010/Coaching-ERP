@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Save, Upload, Building2, MapPin, Phone, Globe, Loader2, CheckCircle2, Plus, X } from "lucide-react";
+import { Save, Upload, Building2, MapPin, Phone, Globe, Loader2, CheckCircle2, Plus, X, Lock, Eye, EyeOff } from "lucide-react";
 import { useSettings } from "@/context/SettingsContext";
 import { supabase } from "@/lib/supabase";
 import { CustomSelect } from "@/components/ui/Select";
@@ -31,6 +31,10 @@ export default function SettingsPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [newSubjectInput, setNewSubjectInput] = useState("");
   const [subjectsLoading, setSubjectsLoading] = useState(true);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -102,6 +106,30 @@ export default function SettingsPage() {
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to delete subject. It might be in use.");
       setTimeout(() => setErrorMsg(""), 3000);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) return;
+    
+    setPasswordLoading(true);
+    setErrorMsg("");
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      
+      if (error) throw error;
+      
+      setSuccessMsg("Admin password updated successfully!");
+      setNewPassword("");
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update password.");
+      setTimeout(() => setErrorMsg(""), 3000);
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -414,6 +442,63 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Lock size={20} className="text-muted" />
+              Admin Security
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label className="text-muted" style={{ fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>New Password</label>
+                <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    className="input" 
+                    style={{ width: '100%', paddingRight: '2.5rem' }} 
+                    placeholder="Enter new password (min 6 characters)" 
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleChangePassword();
+                      }
+                    }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{ 
+                      position: 'absolute', 
+                      right: '0.75rem', 
+                      top: '50%', 
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0.25rem'
+                    }}
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              <button 
+                className="btn btn-primary" 
+                style={{ width: 'fit-content' }}
+                onClick={handleChangePassword}
+                disabled={!newPassword || newPassword.length < 6 || passwordLoading}
+              >
+                {passwordLoading ? 'Updating...' : 'Update Admin Password'}
+              </button>
             </div>
           </div>
 

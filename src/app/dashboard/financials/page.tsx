@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Search, IndianRupee, FileText, Loader2, CheckCircle2, Download, ChevronDown, ChevronRight, Upload } from "lucide-react";
+import { Plus, Search, IndianRupee, FileText, Loader2, CheckCircle2, Download, ChevronDown, ChevronRight, Upload, MessageCircle, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { downloadCSV } from "@/lib/export";
 import { useSettings } from "@/context/SettingsContext";
@@ -17,10 +17,26 @@ export default function FinancialsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
   
+  const [userRole, setUserRole] = useState<string>("admin");
   const [stats, setStats] = useState({
     totalCollected: 0,
     totalPending: 0
   });
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        if (userData?.role) setUserRole(userData.role);
+      }
+    };
+    fetchUserRole();
+  }, []);
 
   useEffect(() => {
     if (settings?.academic_year) {
@@ -49,7 +65,7 @@ export default function FinancialsPage() {
             *,
             fees (
               title,
-              students (id, full_name, enrollment_status)
+              students (id, full_name, enrollment_status, parent_contact, contact_number)
             )
           `)
           .eq('academic_year', settings!.academic_year)
@@ -63,13 +79,16 @@ export default function FinancialsPage() {
       setTransactions(transData);
       
       let pending = 0;
-      let collected = transData.reduce((sum: number, t: any) => sum + (Number(t.amount_paid) || 0), 0);
+      let collected = 0;
       
       feesData.forEach((f: any) => {
-        if (f.status === 'partial') {
+        if (f.status === 'paid') {
+          collected += Number(f.total_amount);
+        } else if (f.status === 'partial') {
           const paid = (f.transactions || []).reduce((sum: number, t: any) => sum + (Number(t.amount_paid) || 0), 0);
+          collected += paid;
           pending += Math.max(0, Number(f.total_amount) - paid);
-        } else if (f.status === 'pending' || f.status === 'overdue') {
+        } else {
           pending += Number(f.total_amount);
         }
       });
@@ -114,13 +133,40 @@ export default function FinancialsPage() {
         status: fee.students?.enrollment_status || 'unknown',
         fees: [],
         totalAmount: 0,
-        totalPaid: 0
+        totalPaid: 0,
+        totalDue: 0,
+        currentMonthDue: 0
       };
     }
-    acc[studentId].fees.push(fee);
+
+    let feePaid = 0;
+    let feeDue = 0;
+    if (fee.status === 'paid') {
+      feePaid = Number(fee.total_amount);
+      feeDue = 0;
+    } else if (fee.status === 'partial') {
+      feePaid = (fee.transactions || []).reduce((sum: number, t: any) => sum + (Number(t.amount_paid) || 0), 0);
+      feeDue = Math.max(0, Number(fee.total_amount) - feePaid);
+    } else {
+      feePaid = 0;
+      feeDue = Number(fee.total_amount);
+    }
+
+    const now = new Date();
+    const endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const isCurrentOrPast = !fee.due_date || new Date(fee.due_date + 'T23:59:59') <= endOfCurrentMonth;
+
+    acc[studentId].fees.push({
+      ...fee,
+      calculatedPaid: feePaid,
+      calculatedDue: feeDue
+    });
     acc[studentId].totalAmount += Number(fee.total_amount);
-    const paid = (fee.transactions || []).reduce((sum: number, t: any) => sum + (Number(t.amount_paid) || 0), 0);
-    acc[studentId].totalPaid += fee.status === 'paid' ? Number(fee.total_amount) : paid;
+    acc[studentId].totalPaid += feePaid;
+    acc[studentId].totalDue += feeDue;
+    if (isCurrentOrPast) {
+      acc[studentId].currentMonthDue += feeDue;
+    }
     return acc;
   }, {});
 
@@ -138,6 +184,8 @@ export default function FinancialsPage() {
       acc[studentId] = {
         studentName: student.full_name || 'Unknown',
         status: student.enrollment_status || 'unknown',
+        parentContact: student.parent_contact,
+        studentContact: student.contact_number,
         payments: [],
         totalPaid: 0
       };
@@ -234,6 +282,29 @@ export default function FinancialsPage() {
       </body></html>
     `);
     w.document.close();
+  };
+
+  const handleWhatsAppSingleReceipt = (group: any, trans: any, e: any) => {
+    e.stopPropagation();
+    const contactToUse = group.parentContact || group.studentContact;
+    if (!contactToUse) {
+      alert("No contact number found for this student or parent.");
+      return;
+    }
+    
+    let phone = contactToUse.replace(/\s+/g, '');
+    if (!phone.startsWith('+')) {
+      phone = `91${phone}`;
+    } else {
+      phone = phone.substring(1); 
+    }
+
+    const message = `Dear Parent,\n\nWe have received a payment of ₹${Number(trans.amount_paid).toLocaleString()} for ${group.studentName} towards ${trans.fee_title}. Receipt No: ${trans.receipt_number || 'N/A'}.\n\nThank you,\n${settings?.name || 'Institute Management'}`;
+    
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, '_blank');
   };
 
   const handlePrintSingleReceipt = (studentGroup: any, trans: any, e: any) => {
@@ -353,22 +424,32 @@ export default function FinancialsPage() {
           <p className="text-muted">Manage fee collections, track pending dues, and generate receipts.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <button onClick={handleExportCSV} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Upload size={18} />
-            Export CSV
-          </button>
-          <Link 
-            href="/dashboard/financials/generate"
-            className="btn btn-outline" 
-            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', borderColor: 'var(--primary)' }}
-          >
-            <Plus size={18} />
-            Generate Annual Fees
+          {userRole === 'admin' && (
+            <button onClick={handleExportCSV} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Upload size={18} />
+              Export CSV
+            </button>
+          )}
+          {userRole === 'admin' && (
+            <Link 
+              href="/dashboard/financials/generate"
+              className="btn btn-outline" 
+              style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)', borderColor: 'var(--primary)' }}
+            >
+              <Plus size={18} />
+              Generate Annual Fees
+            </Link>
+          )}
+          <Link href="/dashboard/financials/defaulters" className="btn btn-outline" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+            <AlertTriangle size={18} />
+            Defaulters Hub
           </Link>
-          <Link href="/dashboard/financials/new-fee" className="btn btn-outline" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={18} />
-            Assign New Fee
-          </Link>
+          {userRole === 'admin' && (
+            <Link href="/dashboard/financials/new-fee" className="btn btn-outline" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Plus size={18} />
+              Assign New Fee
+            </Link>
+          )}
           <Link href="/dashboard/financials/collect" className="btn btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <IndianRupee size={18} />
             Collect Fees
@@ -437,7 +518,8 @@ export default function FinancialsPage() {
                 const group = studentFeeGroups[studentId];
                 const isExpanded = expandedStudents.has(studentId);
                 const pendingCount = group.fees.filter((f: any) => f.status !== 'paid').length;
-                const due = group.totalAmount - group.totalPaid;
+                const due = group.totalDue;
+                const currentMonthDue = group.currentMonthDue;
                 
                 return (
                   <div key={studentId} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -469,7 +551,17 @@ export default function FinancialsPage() {
                         <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>{group.studentName}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           {group.fees.length} fee card{group.fees.length !== 1 ? 's' : ''}
-                          {pendingCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '0.5rem' }}>• {pendingCount} pending</span>}
+                          {currentMonthDue > 0 ? (
+                            <span style={{ color: 'var(--danger)', marginLeft: '0.5rem', fontWeight: 600 }}>
+                              • Due Now: {currencySymbol}{currentMonthDue.toLocaleString()}
+                            </span>
+                          ) : due > 0 ? (
+                            <span style={{ color: 'var(--warning)', marginLeft: '0.5rem' }}>
+                              • Future Dues: {currencySymbol}{due.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--success)', marginLeft: '0.5rem' }}>• All Dues Clear</span>
+                          )}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -482,7 +574,7 @@ export default function FinancialsPage() {
                       </div>
                       <div style={{ textAlign: 'right', minWidth: '90px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Due</div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: due > 0 ? 'var(--danger)' : 'var(--success)' }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: due > 0 ? (currentMonthDue > 0 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)' }}>
                           {currencySymbol}{due.toLocaleString()}
                         </div>
                       </div>
@@ -498,17 +590,19 @@ export default function FinancialsPage() {
                               <th style={{ padding: '0.75rem 1rem', textAlign: 'left' as const, fontWeight: 600 }}>Amount</th>
                               <th style={{ padding: '0.75rem 1rem', textAlign: 'left' as const, fontWeight: 600 }}>Paid</th>
                               <th style={{ padding: '0.75rem 1rem', textAlign: 'left' as const, fontWeight: 600 }}>Status</th>
-                              <th style={{ padding: '0.75rem 1.5rem', textAlign: 'right' as const, fontWeight: 600 }}>Action</th>
+                              {userRole === 'admin' && (
+                                <th style={{ padding: '0.75rem 1.5rem', textAlign: 'right' as const, fontWeight: 600 }}>Action</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
                             {group.fees.map((fee: any) => {
-                              const paid = (fee.transactions || []).reduce((sum: number, t: any) => sum + (Number(t.amount_paid) || 0), 0);
+                              const paid = fee.calculatedPaid ?? 0;
                               return (
                                 <tr key={fee.id} style={{ borderTop: '1px solid var(--border)' }}>
                                   <td style={{ padding: '0.75rem 1.5rem 0.75rem 4rem', fontSize: '0.875rem', fontWeight: 500 }}>{fee.title}</td>
                                   <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>{currencySymbol}{Number(fee.total_amount).toLocaleString()}</td>
-                                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: 'var(--success)' }}>{currencySymbol}{paid.toLocaleString()}</td>
+                                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: paid > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{currencySymbol}{paid.toLocaleString()}</td>
                                   <td style={{ padding: '0.75rem 1rem' }}>
                                     <span style={{ 
                                       background: fee.status === 'paid' ? 'rgba(5, 150, 105, 0.1)' : fee.status === 'partial' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
@@ -518,9 +612,11 @@ export default function FinancialsPage() {
                                       {fee.status}
                                     </span>
                                   </td>
-                                  <td style={{ padding: '0.75rem 1.5rem', textAlign: 'right' as const }}>
-                                    <Link href={`/dashboard/financials/fees/${fee.id}/edit`} className="btn btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', textDecoration: 'none' }}>Edit</Link>
-                                  </td>
+                                  {userRole === 'admin' && (
+                                    <td style={{ padding: '0.75rem 1.5rem', textAlign: 'right' as const }}>
+                                      <Link href={`/dashboard/financials/fees/${fee.id}/edit`} className="btn btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', textDecoration: 'none' }}>Edit</Link>
+                                    </td>
+                                  )}
                                 </tr>
                               );
                             })}
@@ -628,13 +724,32 @@ export default function FinancialsPage() {
                                   <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.125rem' }}>{trans.payment_method}</div>
                                   <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--success)' }}>{currencySymbol}{Number(trans.amount_paid).toLocaleString()}</div>
                                 </div>
-                                <button 
-                                  onClick={(e) => handlePrintSingleReceipt(group, trans, e)}
-                                  className="btn btn-outline" 
-                                  style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem', background: 'var(--surface-solid)' }}
-                                >
-                                  <FileText size={14} /> Print
-                                </button>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <button 
+                                    onClick={(e) => handlePrintSingleReceipt(group, trans, e)}
+                                    className="btn btn-outline" 
+                                    style={{ padding: '0.375rem 0.75rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.375rem', background: 'var(--surface-solid)' }}
+                                  >
+                                    <FileText size={14} /> Print
+                                  </button>
+                                  <button 
+                                    onClick={(e) => handleWhatsAppSingleReceipt(group, trans, e)}
+                                    className="btn" 
+                                    disabled={!(group.parentContact || group.studentContact)}
+                                    title={!(group.parentContact || group.studentContact) ? "No contact number available" : "Share Receipt via WhatsApp"}
+                                    style={{ 
+                                      padding: '0.375rem 0.75rem', 
+                                      fontSize: '0.75rem', 
+                                      display: 'inline-flex', 
+                                      alignItems: 'center', 
+                                      gap: '0.375rem', 
+                                      background: '#25D366', 
+                                      color: 'white'
+                                    }}
+                                  >
+                                    <MessageCircle size={14} /> Share
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}

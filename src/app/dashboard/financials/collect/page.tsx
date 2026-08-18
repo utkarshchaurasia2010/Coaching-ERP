@@ -90,10 +90,22 @@ export default function CollectPaymentPage() {
     }
   };
 
-  const toggleFeeSelection = (id: string) => {
-    setSelectedFeeIds(prev => 
-      prev.includes(id) ? prev.filter(feeId => feeId !== id) : [...prev, id]
-    );
+  const toggleFeeSelection = (id: string, index: number) => {
+    const isCurrentlySelected = selectedFeeIds.includes(id);
+
+    if (isCurrentlySelected) {
+      // If deselecting, also deselect all subsequent fees to preserve chronological order
+      const subsequentIds = pendingFees.slice(index).map(f => f.id);
+      setSelectedFeeIds(prev => prev.filter(feeId => !subsequentIds.includes(feeId)));
+    } else {
+      // Check if all preceding fees are selected
+      const unselectedPreceding = pendingFees.slice(0, index).filter(f => !selectedFeeIds.includes(f.id));
+      if (unselectedPreceding.length > 0) {
+        alert(`Chronological Order Required:\nPlease select the earlier unpaid month ("${unselectedPreceding[0].title}") before selecting this fee.`);
+        return;
+      }
+      setSelectedFeeIds(prev => [...prev, id]);
+    }
     setAutoAllocateAmount(""); // clear auto allocate if manually toggling
   };
 
@@ -283,28 +295,32 @@ export default function CollectPaymentPage() {
                   <p>No outstanding dues for this student.</p>
                 </div>
               ) : (
-                pendingFees.map(fee => {
+                pendingFees.map((fee, index) => {
                   const isSelected = selectedFeeIds.includes(fee.id);
                   const isOverdue = fee.due_date && new Date(fee.due_date) < new Date();
+                  const isPrecedingUnselected = pendingFees.slice(0, index).some(f => !selectedFeeIds.includes(f.id));
+                  const isLocked = !isSelected && isPrecedingUnselected;
                   
                   return (
                     <div 
                       key={fee.id}
-                      onClick={() => toggleFeeSelection(fee.id)}
+                      onClick={() => toggleFeeSelection(fee.id, index)}
                       style={{
                         display: 'flex', alignItems: 'center', padding: '1rem', gap: '1rem',
                         border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
-                        borderRadius: '0.75rem', cursor: 'pointer',
-                        background: isSelected ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
+                        borderRadius: '0.75rem', 
+                        cursor: isLocked ? 'not-allowed' : 'pointer',
+                        opacity: isLocked ? 0.65 : 1,
+                        background: isSelected ? 'rgba(99, 102, 241, 0.05)' : isLocked ? 'rgba(0,0,0,0.02)' : 'transparent',
                         transition: 'all 0.2s'
                       }}
                     >
-                      <div style={{ color: isSelected ? 'var(--primary)' : 'var(--text-muted)' }}>
+                      <div style={{ color: isSelected ? 'var(--primary)' : isLocked ? 'var(--text-muted)' : 'var(--text-muted)' }}>
                         {isSelected ? <CheckCircle size={20} /> : <Circle size={20} />}
                       </div>
                       
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{fee.title}</span>
                           <span style={{ 
                             fontSize: '0.625rem', fontWeight: 700, padding: '0.125rem 0.375rem', borderRadius: '4px', textTransform: 'uppercase',
@@ -313,6 +329,11 @@ export default function CollectPaymentPage() {
                           }}>
                             {isOverdue ? 'Overdue' : 'Upcoming'}
                           </span>
+                          {isLocked && (
+                            <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', background: 'var(--border)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                              🔒 Pay earlier month first
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                           Due Date: {fee.due_date ? new Date(fee.due_date).toLocaleDateString() : 'N/A'}

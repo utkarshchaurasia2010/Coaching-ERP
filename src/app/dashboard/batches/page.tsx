@@ -164,8 +164,18 @@ export default function BatchesPage() {
                         background: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary)',
                         padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 600
                       }}>
-                        {batch.enrollments?.[0]?.count || 0} Students
+                        {batch.enrollments?.[0]?.count || 0} Enrolled {batch.max_capacity ? `/ ${batch.max_capacity} Max` : ''}
                       </div>
+                      {batch.max_capacity && (
+                        <div style={{ marginTop: '0.5rem', width: '100%', maxWidth: '120px', height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ 
+                            width: `${Math.min(100, ((batch.enrollments?.[0]?.count || 0) / batch.max_capacity) * 100)}%`, 
+                            height: '100%', 
+                            background: ((batch.enrollments?.[0]?.count || 0) >= batch.max_capacity) ? 'var(--danger)' : 'var(--primary)',
+                            borderRadius: '2px'
+                          }} />
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '1.25rem 1.5rem' }}>
                       <CustomSelect

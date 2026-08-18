@@ -20,12 +20,14 @@ interface SettingsContextType {
   settings: InstituteSettings | null;
   loading: boolean;
   refreshSettings: () => Promise<void>;
+  setActiveAcademicYear: (year: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType>({
   settings: null,
   loading: true,
-  refreshSettings: async () => {}
+  refreshSettings: async () => {},
+  setActiveAcademicYear: () => {}
 });
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -43,7 +45,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         console.error("Error fetching settings:", error);
       }
       if (data) {
-        setSettings(data);
+        // Look for session override
+        let sessionYear = null;
+        if (typeof window !== 'undefined') {
+          sessionYear = sessionStorage.getItem('active_academic_year');
+        }
+        
+        // Override the global academic year with the session one if it exists
+        setSettings({
+          ...data,
+          academic_year: sessionYear || data.academic_year
+        });
       }
     } catch (err) {
       console.error(err);
@@ -52,12 +64,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setActiveAcademicYear = (year: string) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('active_academic_year', year);
+    }
+    if (settings) {
+      setSettings({ ...settings, academic_year: year });
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings }}>
+    <SettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings, setActiveAcademicYear }}>
       {children}
     </SettingsContext.Provider>
   );

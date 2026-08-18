@@ -79,7 +79,7 @@ export default function ParentDashboard() {
           const { data: scheduleData } = await supabase
             .from('schedules')
             .select(`
-              id, day_of_week, start_time, end_time, room,
+              id, day_of_week, is_recurring, specific_date, start_time, end_time, room,
               subjects (name),
               users (full_name)
             `)
@@ -841,8 +841,17 @@ export default function ParentDashboard() {
 
                       {/* Details */}
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--foreground)', marginBottom: '0.25rem' }}>
-                          {schedule.subjects?.name || 'Unknown Subject'}
+                        <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--foreground)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span>{schedule.subjects?.name || 'Unknown Subject'}</span>
+                          {schedule.is_recurring !== false ? (
+                            <span style={{ fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--primary)', fontWeight: 500 }}>
+                              Every {schedule.day_of_week}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706', fontWeight: 500 }}>
+                              {schedule.specific_date ? new Date(schedule.specific_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'One-Time'}
+                            </span>
+                          )}
                         </div>
                         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
                           {schedule.users?.full_name && (

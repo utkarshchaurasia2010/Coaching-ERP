@@ -37,28 +37,53 @@ export default function SingleStudentExamPrintPage() {
           
         if (subjectsError) throw subjectsError;
 
-        // 3. Fetch Student
-        const { data: studentItem, error: studentError } = await supabase
-          .from('students')
-          .select('id, full_name')
-          .eq('id', studentId)
-          .single();
+        // 3. Fetch all Students in Batch (needed for ranking)
+        if (!examData.batch_id) throw new Error("Exam has no batch");
+        const { data: enrollmentsData, error: enrollError } = await supabase
+          .from('enrollments')
+          .select('students(id, full_name)')
+          .eq('batch_id', examData.batch_id);
           
-        if (studentError) throw studentError;
+        if (enrollError) throw enrollError;
+        const studentsList: any[] = (enrollmentsData as any[])?.map(e => e.students).filter(Boolean) || [];
 
-        // 4. Fetch Results for this student for these subjects
+        // 4. Fetch Results for all students for these subjects
         const subjectIds = (subjectsData || []).map(s => s.id);
-        let studentResults: any[] = [];
+        let allResults: any[] = [];
         if (subjectIds.length > 0) {
            const { data: resultsData, error: resultsError } = await supabase
              .from('exam_results')
              .select('*')
-             .eq('student_id', studentId)
              .in('exam_subject_id', subjectIds);
            
            if (resultsError) throw resultsError;
-           studentResults = resultsData || [];
+           allResults = resultsData || [];
         }
+
+        // Calculate totals for all students
+        const studentTotals = studentsList.map((st: any) => {
+          const stResults = allResults.filter(r => r.student_id === st.id);
+          let total = 0;
+          stResults.forEach(r => {
+            const marks = parseFloat(r.marks_obtained);
+            if (!isNaN(marks)) total += marks;
+          });
+          return { id: st.id, total };
+        });
+
+        // Compute Ranks
+        const validTotals = studentTotals.map(s => s.total);
+        validTotals.sort((a, b) => b - a);
+
+        const currentStudentTotalObj = studentTotals.find(s => s.id === studentId);
+        const currentTotal = currentStudentTotalObj?.total || 0;
+        const rank = validTotals.indexOf(currentTotal) + 1;
+        const percentile = validTotals.length > 0 ? (((validTotals.length - rank) / validTotals.length) * 100).toFixed(1) : "0.0";
+        
+        // Find the specific student
+        const studentItem = studentsList.find(s => s.id === studentId) || { full_name: "Unknown", id: studentId };
+
+        const studentResults = allResults.filter(r => r.student_id === studentId);
 
         // Compile data for student
         let totalMarksObtained = 0;
@@ -89,7 +114,9 @@ export default function SingleStudentExamPrintPage() {
           subjects: subjectsInfo,
           totalMarksObtained,
           totalMaxMarks,
-          percentage
+          percentage,
+          rank: rank || '-',
+          percentile: rank === 1 && validTotals.length > 1 ? "99.9" : percentile
         });
 
       } catch (error) {
@@ -205,6 +232,17 @@ export default function SingleStudentExamPrintPage() {
               <div className="info-label">Date:</div>
               <div className="info-value">{exam.date ? new Date(exam.date).toLocaleDateString() : 'N/A'}</div>
             </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+            <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 600, marginBottom: '5px', textTransform: 'uppercase' }}>Overall Rank</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{studentData.rank}</div>
+          </div>
+          <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+            <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 600, marginBottom: '5px', textTransform: 'uppercase' }}>Percentile</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{studentData.percentile !== '-' ? `${studentData.percentile}%` : '-'}</div>
           </div>
         </div>
 

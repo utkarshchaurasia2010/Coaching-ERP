@@ -21,6 +21,26 @@ export default function NewFeePage() {
   });
 
   useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/');
+        return;
+      }
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+      if (userData?.role !== 'admin') {
+        alert('Access denied. Only administrators can assign new fees.');
+        router.replace('/dashboard/financials');
+      }
+    };
+    checkAdmin();
+  }, [router]);
+
+  useEffect(() => {
     if (settings?.academic_year) {
       const fetchStudents = async () => {
         const { data } = await supabase

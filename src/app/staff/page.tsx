@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, 
@@ -12,7 +13,8 @@ import {
   Loader2,
   ChevronRight,
   ClipboardList,
-  AlertCircle
+  AlertCircle,
+  IndianRupee
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/context/SettingsContext";
@@ -58,7 +60,7 @@ export default function StaffPortal() {
           const { data: scheduleData } = await supabase
             .from('schedules')
             .select(`
-              id, day_of_week, start_time, end_time, room,
+              id, day_of_week, is_recurring, specific_date, start_time, end_time, room,
               batches (name), subjects (name), teacher_id
             `)
             .eq('academic_year', settings.academic_year)
@@ -123,9 +125,19 @@ export default function StaffPortal() {
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Staff Portal</p>
             </div>
           </div>
-          <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.5rem', borderRadius: '50%', border: 'none', background: 'var(--background)' }}>
-            <LogOut size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <Link 
+              href="/dashboard/financials" 
+              className="btn btn-outline" 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8125rem', padding: '0.45rem 0.85rem', textDecoration: 'none' }}
+            >
+              <IndianRupee size={15} />
+              <span>Financials</span>
+            </Link>
+            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.5rem', borderRadius: '50%', border: 'none', background: 'var(--background)' }} title="Sign Out">
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -200,7 +212,18 @@ export default function StaffPortal() {
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>to {schedule.end_time.substring(0, 5)}</span>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '0.25rem' }}>{schedule.subjects?.name || 'Class'}</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                          <h4 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--foreground)', margin: 0 }}>{schedule.subjects?.name || 'Class'}</h4>
+                          {schedule.is_recurring !== false ? (
+                            <span style={{ fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.08)', color: 'var(--primary)', fontWeight: 500 }}>
+                              Every {schedule.day_of_week}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.6875rem', padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706', fontWeight: 500 }}>
+                              {schedule.specific_date ? new Date(schedule.specific_date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'One-Time'}
+                            </span>
+                          )}
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}><Users size={14} /> {schedule.batches?.name}</span>
                           {schedule.room && <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}><CheckCircle size={14} /> Room {schedule.room}</span>}

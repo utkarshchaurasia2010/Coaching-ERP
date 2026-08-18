@@ -98,6 +98,24 @@ export default function ExamBulkPrintPage() {
              };
           });
 
+          // Calculate Rank and Percentile based on totalMarksObtained
+          const validTotals = compiledStudents.map(s => s.totalMarksObtained).filter(t => t !== null && !isNaN(t));
+          validTotals.sort((a, b) => b - a);
+
+          compiledStudents.forEach(student => {
+            if (student.totalMarksObtained !== null && !isNaN(student.totalMarksObtained) && student.totalMaxMarks > 0) {
+              const rank = validTotals.indexOf(student.totalMarksObtained) + 1;
+              const percentile = validTotals.length > 0 
+                ? (((validTotals.length - rank) / validTotals.length) * 100).toFixed(1)
+                : "0.0";
+              student.rank = rank;
+              student.percentile = rank === 1 && validTotals.length > 1 ? "99.9" : percentile;
+            } else {
+              student.rank = '-';
+              student.percentile = '-';
+            }
+          });
+
           // Sort alphabetically
           compiledStudents.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
           setStudentsData(compiledStudents);
@@ -225,6 +243,17 @@ export default function ExamBulkPrintPage() {
                   <div className="info-label">Date:</div>
                   <div className="info-value">{exam.date ? new Date(exam.date).toLocaleDateString() : 'N/A'}</div>
                 </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+              <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 600, marginBottom: '5px', textTransform: 'uppercase' }}>Overall Rank</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{student.rank}</div>
+              </div>
+              <div style={{ flex: 1, background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 600, marginBottom: '5px', textTransform: 'uppercase' }}>Percentile</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{student.percentile !== '-' ? `${student.percentile}%` : '-'}</div>
               </div>
             </div>
 

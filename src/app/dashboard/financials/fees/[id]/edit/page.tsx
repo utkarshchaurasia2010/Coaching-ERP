@@ -31,6 +31,26 @@ export default function EditFeePage({ params }: { params: Promise<{ id: string }
   });
 
   useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/');
+        return;
+      }
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+      if (userData?.role !== 'admin') {
+        alert('Access denied. Only administrators can edit fee structures.');
+        router.replace('/dashboard/financials');
+      }
+    };
+    checkAdmin();
+  }, [router]);
+
+  useEffect(() => {
     if (settings?.academic_year) {
       loadData();
     }
@@ -92,6 +112,11 @@ export default function EditFeePage({ params }: { params: Promise<{ id: string }
         .eq('id', feeId);
 
       if (error) throw error;
+
+      // If status changed to pending or overdue, remove old transaction records for accurate financials
+      if (formData.status === 'pending' || formData.status === 'overdue') {
+        await supabase.from('transactions').delete().eq('fee_id', feeId);
+      }
 
       alert('Fee updated successfully!');
       setIsDirty(false);

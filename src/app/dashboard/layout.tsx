@@ -30,7 +30,7 @@ function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { settings } = useSettings();
+  const { settings, setActiveAcademicYear } = useSettings();
   
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -151,10 +151,13 @@ function DashboardLayout({
           <SidebarItem icon={<Calendar size={20} />} label="Schedule" href="/dashboard/schedule" active={pathname.startsWith('/dashboard/schedule')} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<Megaphone size={20} />} label="Notices" href="/dashboard/notices" active={pathname.startsWith('/dashboard/notices')} onClick={() => setSidebarOpen(false)} />
           
+          {(userRole === 'admin' || userRole === 'teacher') && (
+            <SidebarItem icon={<IndianRupee size={20} />} label="Financials" href="/dashboard/financials" active={pathname.startsWith('/dashboard/financials')} onClick={() => setSidebarOpen(false)} />
+          )}
+
           {userRole === 'admin' && (
             <>
               <SidebarItem icon={<GraduationCap size={20} />} label="Staff" href="/dashboard/staff" active={pathname.startsWith('/dashboard/staff')} onClick={() => setSidebarOpen(false)} />
-              <SidebarItem icon={<IndianRupee size={20} />} label="Financials" href="/dashboard/financials" active={pathname.startsWith('/dashboard/financials')} onClick={() => setSidebarOpen(false)} />
               <SidebarItem icon={<Settings size={20} />} label="Settings" href="/dashboard/settings" active={pathname.startsWith('/dashboard/settings')} onClick={() => setSidebarOpen(false)} />
             </>
           )}

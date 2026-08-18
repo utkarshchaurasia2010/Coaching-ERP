@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Loader2, User, Mail, Phone, MapPin, Calendar, Users, BookOpen, GraduationCap, Camera } from "lucide-react";
+import { ArrowLeft, Save, Loader2, User, Mail, Phone, MapPin, Calendar, Users, BookOpen, GraduationCap, Camera, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { CustomSelect } from "@/components/ui/Select";
 import { useFormDirty } from "@/context/FormDirtyContext";
@@ -20,6 +20,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
   const { attemptBack } = useFormDirty();
   useUnsavedChanges(isDirty);
   const [batches, setBatches] = useState<any[]>([]);
+  const [existingStudents, setExistingStudents] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -39,7 +40,8 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
     board: "",
     previousGrades: "",
     currentClass: "",
-    batchId: ""
+    batchId: "",
+    familyId: ""
   });
 
   useEffect(() => {
@@ -47,6 +49,10 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
       // Fetch batches
       const { data: batchesData } = await supabase.from('batches').select('id, name').eq('status', 'active');
       if (batchesData) setBatches(batchesData);
+
+      // Fetch all students for sibling linking
+      const { data: studentsData } = await supabase.from('students').select('id, full_name, family_id, parent_name, parent_contact, address');
+      if (studentsData) setExistingStudents(studentsData.filter(s => s.id !== studentId));
 
       // Fetch student data
       const { data: studentData, error } = await supabase
@@ -75,7 +81,8 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
           board: studentData.board || "",
           previousGrades: studentData.previous_grades || "",
           currentClass: studentData.current_class || "",
-          batchId: studentData.enrollments?.[0]?.batch_id || ""
+          batchId: studentData.enrollments?.[0]?.batch_id || "",
+          familyId: studentData.family_id || ""
         });
 
         if (studentData.photo_url) {
@@ -86,6 +93,24 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
     };
     fetchData();
   }, [studentId]);
+
+  const handleSiblingSelect = (siblingId: string) => {
+    if (!siblingId) {
+      setFormData({...formData, familyId: ""});
+      return;
+    }
+    const sibling = existingStudents.find(s => s.id === siblingId);
+    if (sibling) {
+      const newFamilyId = sibling.family_id || sibling.id;
+      setFormData({
+        ...formData,
+        familyId: newFamilyId,
+        parentName: formData.parentName || sibling.parent_name || "",
+        parentContact: formData.parentContact || sibling.parent_contact || "",
+        address: formData.address || sibling.address || ""
+      });
+    }
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -138,11 +163,19 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
           board: formData.board || null,
           previous_grades: formData.previousGrades || null,
           current_class: formData.currentClass || null,
-          photo_url: uploadedPhotoUrl
+          photo_url: uploadedPhotoUrl,
+          family_id: formData.familyId || null
         })
         .eq('id', studentId);
 
       if (studentError) throw studentError;
+
+      if (formData.familyId) {
+        const siblingWithoutFamily = existingStudents.find(s => s.id === formData.familyId && !s.family_id);
+        if (siblingWithoutFamily) {
+          await supabase.from('students').update({ family_id: formData.familyId }).eq('id', siblingWithoutFamily.id);
+        }
+      }
 
       // Handle batch update
       // Simple approach: delete existing enrollment and insert new one if changed
@@ -314,6 +347,22 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
             <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Parent Details & Address</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Link Sibling (Optional)</label>
+              <CustomSelect
+                icon={<LinkIcon size={16} />}
+                options={[
+                  { value: '', label: 'No Sibling' },
+                  ...existingStudents.map(s => ({ value: s.id, label: `${s.full_name} (${s.parent_contact || 'No contact'})` }))
+                ]}
+                value={formData.familyId ? existingStudents.find(s => s.family_id === formData.familyId || s.id === formData.familyId)?.id || "" : ""}
+                onChange={handleSiblingSelect}
+                placeholder="Search for an existing sibling..."
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                Linking a sibling will automatically copy the parent details and link their accounts.
+              </p>
+            </div>
             <div className="input-group">
               <label>Parent / Guardian Name *</label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>

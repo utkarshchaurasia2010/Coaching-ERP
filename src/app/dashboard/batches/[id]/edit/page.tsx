@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Loader2, BookOpen, Calendar, AlignLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, BookOpen, Calendar, AlignLeft, CheckCircle2, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { CustomSelect } from "@/components/ui/Select";
 import { useFormDirty } from "@/context/FormDirtyContext";
@@ -27,6 +27,7 @@ export default function EditBatchPage({ params }: { params: Promise<{ id: string
     start_date: "",
     end_date: "",
     status: "active",
+    maxCapacity: "",
     selectedSubjects: [] as string[]
   });
 
@@ -68,6 +69,7 @@ export default function EditBatchPage({ params }: { params: Promise<{ id: string
         start_date: batchData.start_date || "",
         end_date: batchData.end_date || "",
         status: batchData.status || "active",
+        maxCapacity: batchData.max_capacity?.toString() || "",
         selectedSubjects: currentSubjects
       });
 
@@ -96,7 +98,8 @@ export default function EditBatchPage({ params }: { params: Promise<{ id: string
           description: formData.description || null,
           start_date: formData.start_date || null,
           end_date: formData.end_date || null,
-          status: formData.status
+          status: formData.status,
+          max_capacity: formData.maxCapacity ? parseInt(formData.maxCapacity) : null
         })
         .eq('id', batchId);
 
@@ -209,6 +212,21 @@ export default function EditBatchPage({ params }: { params: Promise<{ id: string
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   required
+                />
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label>Maximum Capacity</label>
+              <div className="input-wrapper">
+                <div className="input-icon"><Users size={16} /></div>
+                <input 
+                  type="number" 
+                  min="1"
+                  className="input" 
+                  placeholder="e.g. 50"
+                  value={formData.maxCapacity}
+                  onChange={e => setFormData({...formData, maxCapacity: e.target.value})}
                 />
               </div>
             </div>

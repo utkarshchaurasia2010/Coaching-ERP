@@ -219,6 +219,40 @@ export default function ExamDetailsPage() {
 
   const selectedSubject = examSubjects.find(s => s.id === selectedSubjectId);
 
+  const getRankData = () => {
+    const validMarks = students.map(s => {
+      const markStr = results[s.id]?.marks_obtained;
+      if (markStr === undefined || markStr === null || markStr.toString().trim() === "") return null;
+      const parsed = parseFloat(markStr);
+      return isNaN(parsed) ? null : parsed;
+    }).filter(m => m !== null) as number[];
+    
+    validMarks.sort((a, b) => b - a);
+
+    return students.reduce((acc, student) => {
+      const markStr = results[student.id]?.marks_obtained;
+      if (markStr === undefined || markStr === null || markStr.toString().trim() === "") {
+        acc[student.id] = { rank: '-', percentile: '-' };
+        return acc;
+      }
+      const mark = parseFloat(markStr);
+      if (isNaN(mark)) {
+        acc[student.id] = { rank: '-', percentile: '-' };
+        return acc;
+      }
+      
+      const rank = validMarks.indexOf(mark) + 1;
+      const percentile = validMarks.length > 0 
+        ? (((validMarks.length - rank) / validMarks.length) * 100).toFixed(1)
+        : "0.0";
+        
+      acc[student.id] = { rank, percentile: rank === 1 && validMarks.length > 1 ? "99.9" : percentile };
+      return acc;
+    }, {} as Record<string, {rank: number | string, percentile: string | number}>);
+  };
+  
+  const rankData = getRankData();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -300,9 +334,11 @@ export default function ExamDetailsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '25%' }}>Student Name</th>
-                  <th style={{ width: '25%' }}>Marks Obtained {selectedSubject ? `(Max: ${selectedSubject.max_marks})` : ''}</th>
-                  <th style={{ width: '40%' }}>Remarks</th>
+                  <th style={{ width: '20%' }}>Student Name</th>
+                  <th style={{ width: '15%' }}>Marks {selectedSubject ? `(Max: ${selectedSubject.max_marks})` : ''}</th>
+                  <th style={{ width: '10%', textAlign: 'center' }}>Rank</th>
+                  <th style={{ width: '15%', textAlign: 'center' }}>Percentile</th>
+                  <th style={{ width: '30%' }}>Remarks</th>
                   <th style={{ width: '10%' }}>Actions</th>
                 </tr>
               </thead>
@@ -337,6 +373,14 @@ export default function ExamDetailsPage() {
                           onChange={(e) => handleResultChange(student.id, 'marks_obtained', e.target.value)}
                           style={{ maxWidth: '150px' }}
                         />
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '50%', background: rankData[student.id].rank === 1 ? 'rgba(245, 158, 11, 0.1)' : 'var(--background)', color: rankData[student.id].rank === 1 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: 600, border: '1px solid var(--border)' }}>
+                          {rankData[student.id].rank}
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        {rankData[student.id].percentile !== '-' ? `${rankData[student.id].percentile}%` : '-'}
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
                         <input 

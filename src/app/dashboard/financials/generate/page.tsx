@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, IndianRupee, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +16,26 @@ export default function GenerateFeesPage() {
     admissionFee: 0, 
     examFee: 0 
   });
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/');
+        return;
+      }
+      const { data: userData } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+      if (userData?.role !== 'admin') {
+        alert('Access denied. Only administrators can generate annual fees.');
+        router.replace('/dashboard/financials');
+      }
+    };
+    checkAdmin();
+  }, [router]);
 
   const handleGenerateFees = async (e: React.FormEvent) => {
     e.preventDefault();

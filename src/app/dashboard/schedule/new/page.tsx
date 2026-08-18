@@ -26,6 +26,8 @@ export default function AddSchedulePage() {
     batchId: "",
     subjectId: "",
     teacherId: "",
+    isRecurring: true,
+    specificDate: "",
     dayOfWeek: "Monday",
     startTime: "",
     endTime: "",
@@ -62,20 +64,51 @@ export default function AddSchedulePage() {
         throw new Error("Please fill in all required fields.");
       }
 
-      const { error } = await supabase
+      if (!formData.isRecurring && !formData.specificDate) {
+        throw new Error("Please select a specific date for this class.");
+      }
+
+      const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      let derivedDay = formData.dayOfWeek;
+      if (!formData.isRecurring && formData.specificDate) {
+        const d = new Date(formData.specificDate + 'T00:00:00');
+        derivedDay = DAYS[d.getDay()];
+      }
+
+      let { error } = await supabase
         .from('schedules')
         .insert([{ 
           batch_id: formData.batchId,
           subject_id: formData.subjectId,
           teacher_id: formData.teacherId || null,
-          day_of_week: formData.dayOfWeek,
+          day_of_week: derivedDay,
+          is_recurring: formData.isRecurring,
+          specific_date: formData.isRecurring ? null : formData.specificDate,
           start_time: formData.startTime,
           end_time: formData.endTime,
           room: formData.room || null,
           academic_year: settings?.academic_year || '2025-26'
         }]);
 
-      if (error) throw error;
+      if (error && error.message?.includes('is_recurring')) {
+        // Fallback for when column is not yet added in Supabase
+        const fallback = await supabase
+          .from('schedules')
+          .insert([{ 
+            batch_id: formData.batchId,
+            subject_id: formData.subjectId,
+            teacher_id: formData.teacherId || null,
+            day_of_week: derivedDay,
+            start_time: formData.startTime,
+            end_time: formData.endTime,
+            room: formData.room || null,
+            academic_year: settings?.academic_year || '2025-26'
+          }]);
+        if (fallback.error) throw fallback.error;
+        error = null;
+      } else if (error) {
+        throw error;
+      }
 
       alert('Class scheduled successfully!');
       setIsDirty(false);
@@ -96,14 +129,61 @@ export default function AddSchedulePage() {
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem', color: 'var(--foreground)' }}>Schedule New Class</h1>
-          <p style={{ color: 'var(--text-muted)' }}>Add a recurring class to the weekly timetable.</p>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem', color: 'var(--foreground)' }}>Schedule Class</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Add a recurring weekly routine or a one-time class on a specific date.</p>
         </div>
       </div>
 
       <div className="card" style={{ padding: '2rem' }}>
         <form onChange={() => setIsDirty(true)} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
+          <div className="input-group">
+            <label>Schedule Type *</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, isRecurring: true })}
+                style={{
+                  padding: '1rem',
+                  borderRadius: 'var(--radius)',
+                  border: formData.isRecurring ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: formData.isRecurring ? 'rgba(79, 70, 229, 0.06)' : 'var(--surface-solid)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ fontWeight: 600, color: formData.isRecurring ? 'var(--primary)' : 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  🔄 Weekly Recurring
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  Repeats every week on selected weekday
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, isRecurring: false })}
+                style={{
+                  padding: '1rem',
+                  borderRadius: 'var(--radius)',
+                  border: !formData.isRecurring ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  background: !formData.isRecurring ? 'rgba(79, 70, 229, 0.06)' : 'var(--surface-solid)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <div style={{ fontWeight: 600, color: !formData.isRecurring ? 'var(--primary)' : 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📅 Specific Date / One-Time
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  Occurs once on a specific calendar date
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
             <div className="input-group">
               <label>Select Batch *</label>
@@ -139,24 +219,40 @@ export default function AddSchedulePage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
-            <div className="input-group">
-              <label>Day of Week *</label>
-              <CustomSelect
-                icon={<Calendar size={16} />}
-                options={[
-                  { value: 'Monday', label: 'Monday' },
-                  { value: 'Tuesday', label: 'Tuesday' },
-                  { value: 'Wednesday', label: 'Wednesday' },
-                  { value: 'Thursday', label: 'Thursday' },
-                  { value: 'Friday', label: 'Friday' },
-                  { value: 'Saturday', label: 'Saturday' },
-                  { value: 'Sunday', label: 'Sunday' }
-                ]}
-                value={formData.dayOfWeek}
-                onChange={(val) => setFormData({...formData, dayOfWeek: val})}
-                placeholder="Select Day"
-              />
-            </div>
+            {formData.isRecurring ? (
+              <div className="input-group">
+                <label>Day of Week *</label>
+                <CustomSelect
+                  icon={<Calendar size={16} />}
+                  options={[
+                    { value: 'Monday', label: 'Monday' },
+                    { value: 'Tuesday', label: 'Tuesday' },
+                    { value: 'Wednesday', label: 'Wednesday' },
+                    { value: 'Thursday', label: 'Thursday' },
+                    { value: 'Friday', label: 'Friday' },
+                    { value: 'Saturday', label: 'Saturday' },
+                    { value: 'Sunday', label: 'Sunday' }
+                  ]}
+                  value={formData.dayOfWeek}
+                  onChange={(val) => setFormData({...formData, dayOfWeek: val})}
+                  placeholder="Select Day"
+                />
+              </div>
+            ) : (
+              <div className="input-group">
+                <label>Select Date *</label>
+                <div className="input-wrapper">
+                  <input 
+                    type="date" 
+                    className="input"
+                    style={{ paddingLeft: '1.25rem' }}
+                    required 
+                    value={formData.specificDate} 
+                    onChange={e => setFormData({...formData, specificDate: e.target.value})} 
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="input-group">
               <label>Start Time *</label>

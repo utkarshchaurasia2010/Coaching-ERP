@@ -1,0 +1,2 @@
+ALTER TABLE students ADD COLUMN IF NOT EXISTS family_id UUID;  
+ALTER TABLE batches ADD COLUMN IF NOT EXISTS max_capacity INTEGER; 

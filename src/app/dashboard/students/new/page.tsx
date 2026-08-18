@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Loader2, User, Mail, Phone, MapPin, Calendar, Users, BookOpen, GraduationCap, Camera } from "lucide-react";
+import { ArrowLeft, Save, Loader2, User, Mail, Phone, MapPin, Calendar, Users, BookOpen, GraduationCap, Camera, Link as LinkIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { CustomSelect } from "@/components/ui/Select";
 import { useSettings } from "@/context/SettingsContext";
@@ -17,6 +17,7 @@ export default function NewStudentPage() {
   const [isDirty, setIsDirty] = useState(false);
   useUnsavedChanges(isDirty);
   const [batches, setBatches] = useState<any[]>([]);
+  const [existingStudents, setExistingStudents] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -36,7 +37,8 @@ export default function NewStudentPage() {
     board: "",
     previousGrades: "",
     currentClass: "",
-    batchId: ""
+    batchId: "",
+    familyId: ""
   });
 
   useEffect(() => {
@@ -45,8 +47,31 @@ export default function NewStudentPage() {
       const { data, error } = await supabase.from('batches').select('id, name').eq('status', 'active').eq('academic_year', settings.academic_year);
       if (data) setBatches(data);
     };
+    const fetchStudents = async () => {
+      const { data } = await supabase.from('students').select('id, full_name, family_id, parent_name, parent_contact, address');
+      if (data) setExistingStudents(data);
+    };
     fetchBatches();
+    fetchStudents();
   }, [settings?.academic_year]);
+
+  const handleSiblingSelect = (siblingId: string) => {
+    if (!siblingId) {
+      setFormData({...formData, familyId: ""});
+      return;
+    }
+    const sibling = existingStudents.find(s => s.id === siblingId);
+    if (sibling) {
+      const newFamilyId = sibling.family_id || sibling.id;
+      setFormData({
+        ...formData,
+        familyId: newFamilyId,
+        parentName: formData.parentName || sibling.parent_name || "",
+        parentContact: formData.parentContact || sibling.parent_contact || "",
+        address: formData.address || sibling.address || ""
+      });
+    }
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -101,6 +126,7 @@ export default function NewStudentPage() {
             previous_grades: formData.previousGrades || null,
             current_class: formData.currentClass || null,
             photo_url: uploadedPhotoUrl,
+            family_id: formData.familyId || null,
             enrollment_status: 'active',
             academic_year: settings?.academic_year || '2025-26'
           }
@@ -109,6 +135,13 @@ export default function NewStudentPage() {
         .single();
 
       if (studentError) throw studentError;
+
+      if (formData.familyId) {
+        const siblingWithoutFamily = existingStudents.find(s => s.id === formData.familyId && !s.family_id);
+        if (siblingWithoutFamily) {
+          await supabase.from('students').update({ family_id: formData.familyId }).eq('id', siblingWithoutFamily.id);
+        }
+      }
 
       if (formData.batchId && studentData) {
         const { error: enrollError } = await supabase
@@ -344,6 +377,22 @@ export default function NewStudentPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div className="input-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Link Sibling (Optional)</label>
+              <CustomSelect
+                icon={<LinkIcon size={16} />}
+                options={[
+                  { value: '', label: 'No Sibling' },
+                  ...existingStudents.map(s => ({ value: s.id, label: `${s.full_name} (${s.parent_contact || 'No contact'})` }))
+                ]}
+                value={formData.familyId ? existingStudents.find(s => s.family_id === formData.familyId || s.id === formData.familyId)?.id || "" : ""}
+                onChange={handleSiblingSelect}
+                placeholder="Search for an existing sibling..."
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                Linking a sibling will automatically copy the parent details and link their accounts.
+              </p>
+            </div>
             <div className="input-group">
               <label>Parent / Guardian Name *</label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
