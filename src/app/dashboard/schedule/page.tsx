@@ -25,7 +25,8 @@ export default function SchedulePage() {
   const loadSchedules = async () => {
     try {
       setLoading(true);
-      let { data, error } = await supabase
+      let scheduleList: any[] = [];
+      const res = await supabase
         .from('schedules')
         .select(`
           id, 
@@ -42,7 +43,7 @@ export default function SchedulePage() {
         .eq('academic_year', settings!.academic_year)
         .order('start_time', { ascending: true });
         
-      if (error) {
+      if (res.error) {
         // Fallback in case migration columns are not yet applied in remote DB
         const fallback = await supabase
           .from('schedules')
@@ -59,9 +60,11 @@ export default function SchedulePage() {
           .eq('academic_year', settings!.academic_year)
           .order('start_time', { ascending: true });
         if (fallback.error) throw fallback.error;
-        data = fallback.data;
+        scheduleList = fallback.data || [];
+      } else {
+        scheduleList = res.data || [];
       }
-      setSchedules(data || []);
+      setSchedules(scheduleList);
     } catch (err: any) {
       console.error("Error loading schedules:", err?.message || err);
     } finally {
