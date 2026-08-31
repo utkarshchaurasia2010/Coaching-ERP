@@ -230,7 +230,7 @@ export default function ParentDashboard() {
     <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
       {/* Quick Stats Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+      <div className="parent-stats-grid">
         <div style={{
           background: 'var(--surface-solid)', 
           border: '1px solid rgba(0,0,0,0.04)',
@@ -402,7 +402,7 @@ export default function ParentDashboard() {
 
             {/* Contact Details — View or Edit Mode */}
             {!isEditing ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 {student?.email && (
                   <InfoRow icon={<Mail size={15} />} label="Email" value={student.email} />
                 )}
@@ -424,7 +424,7 @@ export default function ParentDashboard() {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 <EditField icon={<Mail size={15} />} label="Email" type="email" placeholder="student@email.com"
                   value={editData.email} onChange={v => setEditData({...editData, email: v})} />
                 <EditField icon={<Phone size={15} />} label="Phone" type="tel" placeholder="+91 98765 43210"
@@ -462,7 +462,7 @@ export default function ParentDashboard() {
               <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Parent / Guardian</h3>
             </div>
             {!isEditing ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 {student?.parent_name && (
                   <InfoRow icon={<User size={15} />} label="Name" value={student.parent_name} />
                 )}
@@ -476,7 +476,7 @@ export default function ParentDashboard() {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 <EditField icon={<User size={15} />} label="Parent Name" placeholder="e.g. Richard Doe"
                   value={editData.parent_name} onChange={v => setEditData({...editData, parent_name: v})} />
                 <EditField icon={<Phone size={15} />} label="Parent Contact" type="tel" placeholder="+91 98765 43210"
@@ -492,7 +492,7 @@ export default function ParentDashboard() {
                 <BookOpen size={18} />
                 <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Academic History</h3>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 {student.previous_school && (
                   <InfoRow icon={<GraduationCap size={15} />} label="Previous School" value={student.previous_school} />
                 )}
@@ -513,7 +513,7 @@ export default function ParentDashboard() {
                 <Users size={18} />
                 <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Current Batch</h3>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-grid-2" style={{ gap: '1rem' }}>
                 <InfoRow icon={<BookOpen size={15} />} label="Batch Name" value={batch.name} />
                 {batch.description && (
                   <InfoRow icon={<BookOpen size={15} />} label="Description" value={batch.description} />

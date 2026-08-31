@@ -154,7 +154,7 @@ export default function NewNoticePage() {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2" style={{ gap: '1rem' }}>
             <div className="input-group">
               <label>Target Audience</label>
               <select

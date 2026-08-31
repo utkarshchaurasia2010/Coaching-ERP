@@ -301,7 +301,7 @@ export default function SettingsPage() {
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--foreground)' }}>
               Contact Information
             </h2>
-            <form style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }} onSubmit={(e) => { e.preventDefault(); handleSave('Contact Info'); }}>
+            <form className="form-grid-2" style={{ gap: '1rem' }} onSubmit={(e) => { e.preventDefault(); handleSave('Contact Info'); }}>
               <div className="input-group" style={{ marginBottom: 0 }}>
                 <label>Primary Email</label>
                 <input type="email" className="input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="contact@example.com" />

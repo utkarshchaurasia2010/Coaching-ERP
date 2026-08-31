@@ -157,25 +157,8 @@ export default function SchedulePage() {
               {daySchedules.map((schedule) => {
                 const isRecurring = schedule.is_recurring !== false; // Default true if null
                 return (
-                  <div key={schedule.id} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '1.5rem', 
-                    padding: '1.5rem', 
-                    border: '1px solid var(--border)', 
-                    borderRadius: 'var(--radius)',
-                    background: 'var(--surface-solid)',
-                    flexWrap: 'wrap'
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      minWidth: '120px',
-                      paddingRight: '1.5rem',
-                      borderRight: '1px dashed var(--border)'
-                    }}>
+                  <div key={schedule.id} className="schedule-card">
+                    <div className="schedule-time-col">
                       <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>
                         {schedule.start_time.slice(0, 5)}
                       </div>

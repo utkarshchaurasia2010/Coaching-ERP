@@ -190,7 +190,7 @@ export default function EditSchedulePage() {
           {/* Schedule Type Selection */}
           <div className="input-group">
             <label>Schedule Type *</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.25rem' }}>
+            <div className="form-grid-2" style={{ gap: '1rem', marginTop: '0.25rem' }}>
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, isRecurring: true })}
@@ -235,7 +235,7 @@ export default function EditSchedulePage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-2">
             <div className="input-group">
               <label>Select Batch *</label>
               <CustomSelect
@@ -268,7 +268,7 @@ export default function EditSchedulePage() {
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-3">
             {formData.isRecurring ? (
               <div className="input-group">
                 <label>Day of Week *</label>

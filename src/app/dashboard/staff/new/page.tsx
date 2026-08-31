@@ -110,7 +110,7 @@ export default function AddStaffPage() {
       <div className="card" style={{ padding: '2rem' }}>
         <form onChange={() => setIsDirty(true)} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-2">
             <div className="input-group">
               <label>Full Name *</label>
               <div className="input-wrapper">
@@ -141,7 +141,7 @@ export default function AddStaffPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <div className="form-grid-2" style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
             <div className="input-group">
               <label>Email Address (Login ID) *</label>
               <div className="input-wrapper">
@@ -175,7 +175,7 @@ export default function AddStaffPage() {
           </div>
 
           {formData.role === 'teacher' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+            <div className="form-grid-2" style={{ paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
               <div className="input-group">
                 <label>Department</label>
                 <div className="input-wrapper">

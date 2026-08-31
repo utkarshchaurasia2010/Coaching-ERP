@@ -268,7 +268,7 @@ export default function CollectPaymentPage() {
       </div>
 
       {selectedStudentId && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1.5rem', alignItems: 'start' }}>
+        <div className="collect-layout">
           
           {/* LEFT PANEL: OUTSTANDING INVOICES */}
           <div className="card" style={{ padding: '0', overflow: 'hidden' }}>

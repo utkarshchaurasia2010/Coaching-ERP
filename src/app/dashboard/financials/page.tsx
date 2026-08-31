@@ -526,56 +526,56 @@ export default function FinancialsPage() {
                     {/* Student Row */}
                     <div 
                       onClick={() => toggleExpand(studentId)}
+                      className="student-fee-row"
                       style={{ 
-                        padding: '1rem 1.5rem', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '1rem', 
-                        cursor: 'pointer',
                         background: isExpanded ? 'var(--surface)' : 'transparent',
-                        transition: 'background 0.2s'
                       }}
                     >
-                      <div style={{ color: 'var(--text-muted)' }}>
-                        {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                      </div>
-                      <div style={{ 
-                        width: '36px', height: '36px', borderRadius: '50%', 
-                        background: 'var(--primary)', color: 'white', 
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                        fontWeight: 700, fontSize: '0.875rem', flexShrink: 0
-                      }}>
-                        {group.studentName.charAt(0)}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>{group.studentName}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {group.fees.length} fee card{group.fees.length !== 1 ? 's' : ''}
-                          {currentMonthDue > 0 ? (
-                            <span style={{ color: 'var(--danger)', marginLeft: '0.5rem', fontWeight: 600 }}>
-                              • Due Now: {currencySymbol}{currentMonthDue.toLocaleString()}
-                            </span>
-                          ) : due > 0 ? (
-                            <span style={{ color: 'var(--warning)', marginLeft: '0.5rem' }}>
-                              • Future Dues: {currencySymbol}{due.toLocaleString()}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--success)', marginLeft: '0.5rem' }}>• All Dues Clear</span>
-                          )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', flex: 1 }}>
+                        <div style={{ color: 'var(--text-muted)' }}>
+                          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </div>
+                        <div style={{ 
+                          width: '36px', height: '36px', borderRadius: '50%', 
+                          background: 'var(--primary)', color: 'white', 
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                          fontWeight: 700, fontSize: '0.875rem', flexShrink: 0
+                        }}>
+                          {group.studentName.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>{group.studentName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {group.fees.length} fee card{group.fees.length !== 1 ? 's' : ''}
+                            {currentMonthDue > 0 ? (
+                              <span style={{ color: 'var(--danger)', marginLeft: '0.5rem', fontWeight: 600 }}>
+                                • Due Now: {currencySymbol}{currentMonthDue.toLocaleString()}
+                              </span>
+                            ) : due > 0 ? (
+                              <span style={{ color: 'var(--warning)', marginLeft: '0.5rem' }}>
+                                • Future Dues: {currencySymbol}{due.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--success)', marginLeft: '0.5rem' }}>• All Dues Clear</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Total</div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem' }}>{currencySymbol}{group.totalAmount.toLocaleString()}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', minWidth: '90px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Paid</div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--success)' }}>{currencySymbol}{group.totalPaid.toLocaleString()}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', minWidth: '90px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Due</div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: due > 0 ? (currentMonthDue > 0 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)' }}>
-                          {currencySymbol}{due.toLocaleString()}
+
+                      <div className="student-fee-amounts">
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Total</div>
+                          <div style={{ fontWeight: 700, fontSize: '1rem' }}>{currencySymbol}{group.totalAmount.toLocaleString()}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: '70px' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Paid</div>
+                          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--success)' }}>{currencySymbol}{group.totalPaid.toLocaleString()}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: '70px' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Due</div>
+                          <div style={{ fontWeight: 700, fontSize: '1rem', color: due > 0 ? (currentMonthDue > 0 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)' }}>
+                            {currencySymbol}{due.toLocaleString()}
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -243,7 +243,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div className="form-grid-2">
               <div className="input-group">
                 <label>First Name *</label>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -305,7 +305,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
             </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Academic History</h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-2">
             <div className="input-group" style={{ gridColumn: '1 / -1' }}>
               <label>Previous School / College Name</label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -346,7 +346,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
             </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Parent Details & Address</h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-2">
             <div className="input-group" style={{ gridColumn: '1 / -1' }}>
               <label>Link Sibling (Optional)</label>
               <CustomSelect
@@ -395,7 +395,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
             </div>
             <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Enrollment Class</h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-grid-2">
             <div className="input-group">
               <label>Current Class / Grade *</label>
               <CustomSelect
