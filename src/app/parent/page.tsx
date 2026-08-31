@@ -201,14 +201,78 @@ export default function ParentDashboard() {
     );
   }
 
-  // Financial calculations (correct field: total_amount, amount_paid)
-  const totalFees = fees.reduce((sum, fee) => sum + Number(fee.total_amount || 0), 0);
-  const totalPaid = fees.reduce((sum, fee) => {
-    const feePaid = (fee.transactions || []).reduce((s: number, t: any) => s + Number(t.amount_paid || 0), 0);
-    return sum + feePaid;
-  }, 0);
+  // Financial calculations with deduplication
+  // Deduplicate and process fee cards
+  const processedFeesMap = new Map<string, any>();
+  
+  fees.forEach(fee => {
+    // Unique key per fee card title to prevent duplicate cards for same month
+    const key = fee.title ? fee.title.trim().toLowerCase() : fee.id;
+    
+    // Deduplicate transactions for this fee
+    const uniqueTxns: any[] = [];
+    const seenTxnKeys = new Set<string>();
+    
+    (fee.transactions || []).forEach((t: any) => {
+      const txnKey = t.id || `${t.receipt_number}_${t.amount_paid}_${t.payment_date}`;
+      if (!seenTxnKeys.has(txnKey)) {
+        seenTxnKeys.add(txnKey);
+        uniqueTxns.push(t);
+      }
+    });
+
+    if (processedFeesMap.has(key)) {
+      // Merge with existing fee card if duplicate exists
+      const existing = processedFeesMap.get(key);
+      const combinedTxns = [...existing.transactions];
+      uniqueTxns.forEach(t => {
+        const txnKey = t.id || `${t.receipt_number}_${t.amount_paid}_${t.payment_date}`;
+        if (!seenTxnKeys.has(txnKey)) {
+          seenTxnKeys.add(txnKey);
+          combinedTxns.push(t);
+        }
+      });
+      existing.transactions = combinedTxns;
+      if (fee.status === 'paid') existing.status = 'paid';
+    } else {
+      processedFeesMap.set(key, {
+        ...fee,
+        transactions: uniqueTxns
+      });
+    }
+  });
+
+  const processedFees = Array.from(processedFeesMap.values()).map(fee => {
+    const txnsTotal = (fee.transactions || []).reduce((s: number, t: any) => s + Number(t.amount_paid || 0), 0);
+    const total = Number(fee.total_amount || 0);
+    
+    let paid = 0;
+    let due = 0;
+    if (fee.status === 'paid') {
+      paid = total;
+      due = 0;
+    } else if (fee.status === 'partial') {
+      paid = Math.min(total, txnsTotal);
+      due = Math.max(0, total - paid);
+    } else {
+      paid = 0;
+      due = total;
+    }
+    
+    const percentage = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+
+    return {
+      ...fee,
+      calculatedPaid: paid,
+      calculatedDue: due,
+      percentage
+    };
+  });
+
+  const totalFees = processedFees.reduce((sum, fee) => sum + Number(fee.total_amount || 0), 0);
+  const totalPaid = processedFees.reduce((sum, fee) => sum + Number(fee.calculatedPaid || 0), 0);
   const dueAmount = Math.max(0, totalFees - totalPaid);
-  const allTransactions = fees.flatMap((fee: any) =>
+  const allTransactions = processedFees.flatMap((fee: any) =>
     (fee.transactions || []).map((t: any) => ({ ...t, feeTitle: fee.title }))
   ).sort((a: any, b: any) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime());
 
@@ -646,22 +710,22 @@ export default function ParentDashboard() {
                 marginLeft: 'auto', background: 'var(--surface)', border: '1px solid var(--border)',
                 padding: '0.125rem 0.5rem', borderRadius: '999px', fontSize: '0.75rem', color: 'var(--text-muted)'
               }}>
-                {fees.length} item{fees.length !== 1 ? 's' : ''}
+                {processedFees.length} item{processedFees.length !== 1 ? 's' : ''}
               </span>
             </div>
 
-            {fees.length === 0 ? (
+            {processedFees.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                 <IndianRupee size={36} style={{ opacity: 0.15, margin: '0 auto 0.75rem' }} />
                 <p>No fees assigned for this academic year.</p>
               </div>
             ) : (
               <div>
-                {fees.map((fee) => {
-                  const paid = (fee.transactions || []).reduce((s: number, t: any) => s + Number(t.amount_paid || 0), 0);
+                {processedFees.map((fee) => {
+                  const paid = fee.calculatedPaid;
                   const total = Number(fee.total_amount);
-                  const remaining = Math.max(0, total - paid);
-                  const percentage = total > 0 ? Math.min(100, (paid / total) * 100) : 0;
+                  const remaining = fee.calculatedDue;
+                  const percentage = fee.percentage;
                   const isExpanded = expandedFee === fee.id;
 
                   return (
