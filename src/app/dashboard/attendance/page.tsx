@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   CalendarCheck, Users, CheckCircle2, XCircle, Clock, 
   HelpCircle, Save, Send, MessageSquare, Loader2, ArrowLeft,
-  Calendar, Check, AlertCircle, RefreshCw
+  Calendar, Check, AlertCircle, RefreshCw, Search, Filter,
+  CheckCheck, UserX, ShieldAlert
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/context/SettingsContext";
@@ -33,8 +34,12 @@ export default function AttendancePage() {
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const [attendanceList, setAttendanceList] = useState<StudentAttendance[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "late" | "excused">("all");
+  
   const [tableMissing, setTableMissing] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
   
@@ -81,6 +86,7 @@ export default function AttendancePage() {
       try {
         setLoadingAttendance(true);
         setSaveSuccess(false);
+        setHasUnsavedChanges(false);
 
         // 1. Fetch student IDs enrolled in this batch
         const { data: enrollments, error: enrollError } = await supabase
@@ -168,6 +174,7 @@ export default function AttendancePage() {
         item.student_id === studentId ? { ...item, status } : item
       )
     );
+    setHasUnsavedChanges(true);
     setSaveSuccess(false);
   };
 
@@ -178,13 +185,15 @@ export default function AttendancePage() {
         item.student_id === studentId ? { ...item, remarks } : item
       )
     );
+    setHasUnsavedChanges(true);
   };
 
   // Mark all students as present
-  const handleMarkAllPresent = () => {
+  const handleMarkAll = (status: "present" | "absent" | "late" | "excused") => {
     setAttendanceList(prev =>
-      prev.map(item => ({ ...item, status: "present" }))
+      prev.map(item => ({ ...item, status }))
     );
+    setHasUnsavedChanges(true);
     setSaveSuccess(false);
   };
 
@@ -215,11 +224,18 @@ export default function AttendancePage() {
 
       if (error) throw error;
 
+      setTableMissing(false);
+      setHasUnsavedChanges(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err: any) {
       console.error("Error saving attendance:", err);
-      alert("Failed to save attendance: " + err.message);
+      if (err.message?.includes("Could not find the table 'public.attendance'") || err.code === "42P01" || err.message?.includes("does not exist")) {
+        setTableMissing(true);
+        alert("The 'attendance' table is not created in Supabase yet. Please run the create_attendance_schema.sql script in Supabase SQL editor.");
+      } else {
+        alert("Failed to save attendance: " + err.message);
+      }
     } finally {
       setSaving(false);
     }
@@ -234,6 +250,23 @@ export default function AttendancePage() {
   const attendanceRate = totalStudents > 0 ? Math.round(((presentCount + lateCount) / totalStudents) * 100) : 0;
 
   const currentBatchName = batches.find(b => b.id === selectedBatchId)?.name || "Batch";
+
+  // Filtered students list for display
+  const filteredList = useMemo(() => {
+    return attendanceList.filter(item => {
+      // Search match
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch = !query || 
+        item.student_name.toLowerCase().includes(query) ||
+        (item.roll_number && item.roll_number.toLowerCase().includes(query)) ||
+        (item.parent_contact && item.parent_contact.includes(query));
+
+      // Status match
+      const matchesStatus = statusFilter === "all" || item.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [attendanceList, searchQuery, statusFilter]);
 
   // Format WhatsApp message for a student
   const getWhatsAppMessage = (student: StudentAttendance) => {
@@ -263,7 +296,7 @@ export default function AttendancePage() {
   const absentees = attendanceList.filter(a => a.status === "absent");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       {/* Header */}
       <div className="flex-between" style={{ flexWrap: "wrap", gap: "1rem" }}>
         <div>
@@ -271,20 +304,11 @@ export default function AttendancePage() {
             Daily Attendance
           </h1>
           <p className="text-muted" style={{ marginTop: "0.25rem" }}>
-            Track batch-wise daily attendance and notify parents of absentees via WhatsApp.
+            Mark student attendance, track attendance rates, and trigger instant WhatsApp absent alerts.
           </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button
-            onClick={handleMarkAllPresent}
-            disabled={attendanceList.length === 0}
-            className="btn btn-outline"
-            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-          >
-            <Check size={16} /> Mark All Present
-          </button>
-
           {absentCount > 0 && (
             <button
               onClick={() => setShowNotifyModal(true)}
@@ -307,31 +331,66 @@ export default function AttendancePage() {
             onClick={handleSaveAttendance}
             disabled={saving || attendanceList.length === 0}
             className="btn btn-primary"
-            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "0.5rem",
+              background: hasUnsavedChanges ? "var(--primary)" : undefined
+            }}
           >
             {saving ? <Loader2 className="animate-spin" size={18} /> : saveSuccess ? <Check size={18} /> : <Save size={18} />}
-            {saveSuccess ? "Saved Successfully!" : "Save Attendance"}
+            {saveSuccess ? "Saved Successfully!" : hasUnsavedChanges ? "Save Changes *" : "Save Attendance"}
           </button>
         </div>
       </div>
 
+      {/* Unsaved changes banner */}
+      {hasUnsavedChanges && (
+        <div style={{
+          background: "rgba(79, 70, 229, 0.08)",
+          border: "1px solid rgba(79, 70, 229, 0.2)",
+          borderRadius: "var(--radius)",
+          padding: "0.75rem 1.25rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "var(--primary)", fontWeight: 600 }}>
+            <AlertCircle size={16} />
+            <span>You have unsaved attendance modifications. Don't forget to click Save!</span>
+          </div>
+          <button
+            onClick={handleSaveAttendance}
+            disabled={saving}
+            className="btn btn-primary"
+            style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem" }}
+          >
+            {saving ? "Saving..." : "Save Now"}
+          </button>
+        </div>
+      )}
+
       {/* Database Setup Warning if table does not exist */}
       {tableMissing && (
-        <div className="alert alert-danger" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700 }}>
-            <AlertCircle size={18} /> Attendance Table Setup Required
+        <div className="card" style={{ border: "1px solid var(--danger)", background: "rgba(225, 29, 72, 0.04)", padding: "1.25rem 1.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "var(--danger)", marginBottom: "0.5rem" }}>
+            <ShieldAlert size={20} /> Supabase Attendance Table Setup Required
           </div>
-          <div style={{ fontSize: "0.875rem" }}>
-            The <code>attendance</code> table is not found in your Supabase database. Please run the migration script <code>create_attendance_schema.sql</code> in your Supabase SQL Editor to enable attendance saving.
+          <p style={{ fontSize: "0.875rem", margin: "0 0 0.75rem 0", color: "var(--foreground)" }}>
+            The <code>public.attendance</code> table hasn't been created in Supabase yet. Please execute the SQL migration script in your Supabase SQL Editor:
+          </p>
+          <div style={{ background: "var(--background)", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "0.8125rem", fontFamily: "monospace", overflowX: "auto" }}>
+            Open <code>create_attendance_schema.sql</code> in your project root and run it in Supabase SQL Editor.
           </div>
         </div>
       )}
 
-      {/* Filter Bar: Batch & Date Selectors */}
+      {/* Controls Bar: Batch, Date, Quick Bulk Actions */}
       <div className="card" style={{ padding: "1.25rem 1.5rem" }}>
-        <div className="form-grid-2" style={{ gap: "1.25rem", alignItems: "center" }}>
+        <div className="form-grid-2" style={{ gap: "1.25rem", alignItems: "center", marginBottom: "1rem" }}>
           <div className="input-group" style={{ marginBottom: 0 }}>
-            <label>Select Batch</label>
+            <label style={{ fontWeight: 600 }}>Select Batch</label>
             <CustomSelect
               icon={<Users size={16} />}
               options={batches.map(b => ({ value: b.id, label: b.name }))}
@@ -342,7 +401,7 @@ export default function AttendancePage() {
           </div>
 
           <div className="input-group" style={{ marginBottom: 0 }}>
-            <label>Attendance Date</label>
+            <label style={{ fontWeight: 600 }}>Attendance Date</label>
             <div className="input-wrapper">
               <div className="input-icon"><Calendar size={16} /></div>
               <input
@@ -354,59 +413,121 @@ export default function AttendancePage() {
             </div>
           </div>
         </div>
+
+        {/* Quick Bulk Actions */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", paddingTop: "0.75rem", borderTop: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>Quick Mark:</span>
+            <button
+              type="button"
+              onClick={() => handleMarkAll("present")}
+              disabled={attendanceList.length === 0}
+              className="btn btn-outline"
+              style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem", color: "var(--success)", borderColor: "rgba(5, 150, 105, 0.3)" }}
+            >
+              <CheckCheck size={14} /> All Present
+            </button>
+            <button
+              type="button"
+              onClick={() => handleMarkAll("absent")}
+              disabled={attendanceList.length === 0}
+              className="btn btn-outline"
+              style={{ padding: "0.3rem 0.65rem", fontSize: "0.75rem", color: "var(--danger)", borderColor: "rgba(225, 29, 72, 0.3)" }}
+            >
+              <UserX size={14} /> All Absent
+            </button>
+          </div>
+
+          {/* Search bar inside controls */}
+          <div className="input-wrapper" style={{ maxWidth: "260px", minWidth: "180px" }}>
+            <div className="input-icon"><Search size={14} /></div>
+            <input
+              type="text"
+              className="input"
+              placeholder="Search students..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ padding: "0.35rem 0.75rem 0.35rem 2.25rem", fontSize: "0.8125rem" }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Stats KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem" }}>
-        <div className="card" style={{ padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ background: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", padding: "0.75rem", borderRadius: "12px" }}>
-            <Users size={22} />
-          </div>
+      {/* KPI Stats Bar & Distribution Visualizer */}
+      <div className="card" style={{ padding: "1.25rem 1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
           <div>
-            <div className="text-muted" style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" }}>Total Enrolled</div>
+            <div className="text-muted" style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase" }}>Enrolled</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--foreground)" }}>{totalStudents}</div>
           </div>
-        </div>
-
-        <div className="card" style={{ padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ background: "rgba(5, 150, 105, 0.1)", color: "var(--success)", padding: "0.75rem", borderRadius: "12px" }}>
-            <CheckCircle2 size={22} />
-          </div>
           <div>
-            <div className="text-muted" style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" }}>Present</div>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase", color: "var(--success)" }}>Present</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--success)" }}>{presentCount}</div>
           </div>
-        </div>
-
-        <div className="card" style={{ padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ background: "rgba(225, 29, 72, 0.1)", color: "var(--danger)", padding: "0.75rem", borderRadius: "12px" }}>
-            <XCircle size={22} />
-          </div>
           <div>
-            <div className="text-muted" style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" }}>Absent</div>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase", color: "var(--danger)" }}>Absent</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--danger)" }}>{absentCount}</div>
           </div>
-        </div>
-
-        <div className="card" style={{ padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ background: "rgba(217, 119, 6, 0.1)", color: "var(--warning)", padding: "0.75rem", borderRadius: "12px" }}>
-            <Clock size={22} />
-          </div>
           <div>
-            <div className="text-muted" style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" }}>Late / Excused</div>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase", color: "var(--warning)" }}>Late / Excused</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--warning)" }}>{lateCount + excusedCount}</div>
           </div>
-        </div>
-
-        <div className="card" style={{ padding: "1.25rem", display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={{ background: "rgba(79, 70, 229, 0.08)", color: "var(--primary)", padding: "0.75rem", borderRadius: "12px" }}>
-            <CalendarCheck size={22} />
-          </div>
           <div>
-            <div className="text-muted" style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase" }}>Attendance Rate</div>
+            <div style={{ fontSize: "0.6875rem", fontWeight: 700, textTransform: "uppercase", color: "var(--primary)" }}>Attendance %</div>
             <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--primary)" }}>{attendanceRate}%</div>
           </div>
         </div>
+
+        {/* Stacked Visual Distribution Bar */}
+        {totalStudents > 0 && (
+          <div>
+            <div style={{ display: "flex", height: "8px", borderRadius: "999px", overflow: "hidden", background: "var(--border)", gap: "2px" }}>
+              <div style={{ width: `${(presentCount / totalStudents) * 100}%`, background: "var(--success)", transition: "width 0.3s" }} title={`Present: ${presentCount}`} />
+              <div style={{ width: `${(lateCount / totalStudents) * 100}%`, background: "var(--warning)", transition: "width 0.3s" }} title={`Late: ${lateCount}`} />
+              <div style={{ width: `${(excusedCount / totalStudents) * 100}%`, background: "#0284c7", transition: "width 0.3s" }} title={`Excused: ${excusedCount}`} />
+              <div style={{ width: `${(absentCount / totalStudents) * 100}%`, background: "var(--danger)", transition: "width 0.3s" }} title={`Absent: ${absentCount}`} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Filter Tabs */}
+      <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto" }}>
+        <button
+          onClick={() => setStatusFilter("all")}
+          className={`btn ${statusFilter === "all" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem", borderRadius: "999px" }}
+        >
+          All ({totalStudents})
+        </button>
+        <button
+          onClick={() => setStatusFilter("present")}
+          className={`btn ${statusFilter === "present" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem", borderRadius: "999px", color: statusFilter === "present" ? undefined : "var(--success)" }}
+        >
+          Present ({presentCount})
+        </button>
+        <button
+          onClick={() => setStatusFilter("absent")}
+          className={`btn ${statusFilter === "absent" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem", borderRadius: "999px", color: statusFilter === "absent" ? undefined : "var(--danger)" }}
+        >
+          Absent ({absentCount})
+        </button>
+        <button
+          onClick={() => setStatusFilter("late")}
+          className={`btn ${statusFilter === "late" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem", borderRadius: "999px", color: statusFilter === "late" ? undefined : "var(--warning)" }}
+        >
+          Late ({lateCount})
+        </button>
+        <button
+          onClick={() => setStatusFilter("excused")}
+          className={`btn ${statusFilter === "excused" ? "btn-primary" : "btn-outline"}`}
+          style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem", borderRadius: "999px", color: statusFilter === "excused" ? undefined : "#0284c7" }}
+        >
+          Excused ({excusedCount})
+        </button>
       </div>
 
       {/* Student Attendance List */}
@@ -419,23 +540,24 @@ export default function AttendancePage() {
             </h2>
           </div>
           <span className="text-muted" style={{ fontSize: "0.8125rem" }}>
-            {totalStudents} student{totalStudents !== 1 ? "s" : ""}
+            Showing {filteredList.length} of {totalStudents}
           </span>
         </div>
 
         {loadingAttendance ? (
           <div style={{ padding: "4rem", textAlign: "center" }}>
             <Loader2 className="animate-spin text-muted" size={28} style={{ margin: "0 auto 0.5rem" }} />
-            <div className="text-muted" style={{ fontSize: "0.875rem" }}>Loading students & attendance...</div>
+            <div className="text-muted" style={{ fontSize: "0.875rem" }}>Loading students...</div>
           </div>
-        ) : attendanceList.length === 0 ? (
+        ) : filteredList.length === 0 ? (
           <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
             <Users size={36} style={{ margin: "0 auto 0.75rem", opacity: 0.3 }} />
-            <p>No active students enrolled in this batch.</p>
+            <p>{attendanceList.length === 0 ? "No active students enrolled in this batch." : "No students match the current filter/search."}</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {attendanceList.map((student, index) => {
+            {filteredList.map((student, index) => {
+              const isPresent = student.status === "present";
               const isAbsent = student.status === "absent";
               const isLate = student.status === "late";
               const isExcused = student.status === "excused";
@@ -445,24 +567,35 @@ export default function AttendancePage() {
                   key={student.student_id}
                   style={{
                     padding: "1rem 1.5rem",
-                    borderBottom: index < attendanceList.length - 1 ? "1px solid var(--border)" : "none",
+                    borderBottom: index < filteredList.length - 1 ? "1px solid var(--border)" : "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: "1rem",
                     flexWrap: "wrap",
-                    background: isAbsent ? "rgba(225, 29, 72, 0.02)" : "transparent",
+                    background: isAbsent 
+                      ? "rgba(225, 29, 72, 0.04)" 
+                      : isLate 
+                      ? "rgba(245, 158, 11, 0.03)" 
+                      : "transparent",
                     transition: "background 0.2s"
                   }}
                 >
                   {/* Student Info */}
                   <div style={{ display: "flex", alignItems: "center", gap: "1rem", minWidth: "220px", flex: 1 }}>
                     <div style={{
-                      width: "38px", height: "38px", borderRadius: "50%",
-                      background: isAbsent ? "var(--danger)" : "var(--primary)",
+                      width: "40px", height: "40px", borderRadius: "50%",
+                      background: isPresent 
+                        ? "var(--success)" 
+                        : isAbsent 
+                        ? "var(--danger)" 
+                        : isLate 
+                        ? "var(--warning)" 
+                        : "#0284c7",
                       color: "white", display: "flex", alignItems: "center",
-                      justifyContent: "center", fontWeight: 700, fontSize: "0.875rem",
-                      flexShrink: 0
+                      justifyContent: "center", fontWeight: 700, fontSize: "0.9375rem",
+                      flexShrink: 0,
+                      transition: "background 0.2s"
                     }}>
                       {student.student_name.charAt(0)}
                     </div>
@@ -478,39 +611,47 @@ export default function AttendancePage() {
                   </div>
 
                   {/* Remarks Input */}
-                  <div style={{ minWidth: "150px", flex: 1 }}>
+                  <div style={{ minWidth: "160px", flex: 1 }}>
                     <input
                       type="text"
                       className="input"
-                      placeholder="Add remarks (optional)..."
+                      placeholder="Remarks (e.g. sick leave, late 15m)..."
                       value={student.remarks}
                       onChange={e => handleRemarksChange(student.student_id, e.target.value)}
                       style={{ padding: "0.4rem 0.75rem", fontSize: "0.8125rem" }}
                     />
                   </div>
 
-                  {/* Status Toggle Buttons */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                  {/* Modern Segmented Status Selector */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    background: "var(--surface-solid)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "10px",
+                    padding: "3px",
+                    gap: "2px"
+                  }}>
                     {/* Present Button */}
                     <button
                       type="button"
                       onClick={() => handleStatusChange(student.student_id, "present")}
                       style={{
-                        padding: "0.4rem 0.875rem",
-                        borderRadius: "8px",
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "7px",
                         fontWeight: 600,
                         fontSize: "0.8125rem",
                         display: "flex",
                         alignItems: "center",
-                        gap: "0.375rem",
-                        border: student.status === "present" ? "1px solid var(--success)" : "1px solid var(--border)",
-                        background: student.status === "present" ? "var(--success)" : "var(--surface-solid)",
-                        color: student.status === "present" ? "white" : "var(--text-muted)",
+                        gap: "0.35rem",
+                        border: "none",
+                        background: isPresent ? "var(--success)" : "transparent",
+                        color: isPresent ? "white" : "var(--text-muted)",
                         cursor: "pointer",
                         transition: "all 0.15s"
                       }}
                     >
-                      <CheckCircle2 size={14} /> Present
+                      <CheckCircle2 size={13} /> Present
                     </button>
 
                     {/* Absent Button */}
@@ -518,21 +659,21 @@ export default function AttendancePage() {
                       type="button"
                       onClick={() => handleStatusChange(student.student_id, "absent")}
                       style={{
-                        padding: "0.4rem 0.875rem",
-                        borderRadius: "8px",
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "7px",
                         fontWeight: 600,
                         fontSize: "0.8125rem",
                         display: "flex",
                         alignItems: "center",
-                        gap: "0.375rem",
-                        border: student.status === "absent" ? "1px solid var(--danger)" : "1px solid var(--border)",
-                        background: student.status === "absent" ? "var(--danger)" : "var(--surface-solid)",
-                        color: student.status === "absent" ? "white" : "var(--text-muted)",
+                        gap: "0.35rem",
+                        border: "none",
+                        background: isAbsent ? "var(--danger)" : "transparent",
+                        color: isAbsent ? "white" : "var(--text-muted)",
                         cursor: "pointer",
                         transition: "all 0.15s"
                       }}
                     >
-                      <XCircle size={14} /> Absent
+                      <XCircle size={13} /> Absent
                     </button>
 
                     {/* Late Button */}
@@ -540,49 +681,71 @@ export default function AttendancePage() {
                       type="button"
                       onClick={() => handleStatusChange(student.student_id, "late")}
                       style={{
-                        padding: "0.4rem 0.875rem",
-                        borderRadius: "8px",
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "7px",
                         fontWeight: 600,
                         fontSize: "0.8125rem",
                         display: "flex",
                         alignItems: "center",
-                        gap: "0.375rem",
-                        border: student.status === "late" ? "1px solid var(--warning)" : "1px solid var(--border)",
-                        background: student.status === "late" ? "var(--warning)" : "var(--surface-solid)",
-                        color: student.status === "late" ? "white" : "var(--text-muted)",
+                        gap: "0.35rem",
+                        border: "none",
+                        background: isLate ? "var(--warning)" : "transparent",
+                        color: isLate ? "white" : "var(--text-muted)",
                         cursor: "pointer",
                         transition: "all 0.15s"
                       }}
                     >
-                      <Clock size={14} /> Late
+                      <Clock size={13} /> Late
                     </button>
 
-                    {/* WhatsApp Action Button if Absent */}
-                    {isAbsent && (
-                      <a
-                        href={getWhatsAppUrl(student)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-outline"
-                        title="Send WhatsApp Absent Alert"
-                        style={{
-                          padding: "0.4rem 0.625rem",
-                          borderRadius: "8px",
-                          color: "#25D366",
-                          borderColor: "#25D366",
-                          background: "rgba(37, 211, 102, 0.08)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.25rem",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          textDecoration: "none"
-                        }}
-                      >
-                        <MessageSquare size={14} /> WhatsApp
-                      </a>
-                    )}
+                    {/* Excused Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(student.student_id, "excused")}
+                      style={{
+                        padding: "0.35rem 0.75rem",
+                        borderRadius: "7px",
+                        fontWeight: 600,
+                        fontSize: "0.8125rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        border: "none",
+                        background: isExcused ? "#0284c7" : "transparent",
+                        color: isExcused ? "white" : "var(--text-muted)",
+                        cursor: "pointer",
+                        transition: "all 0.15s"
+                      }}
+                    >
+                      <HelpCircle size={13} /> Leave
+                    </button>
                   </div>
+
+                  {/* Instant WhatsApp Button for Absentees */}
+                  {isAbsent && (
+                    <a
+                      href={getWhatsAppUrl(student)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-outline"
+                      title="Send WhatsApp Absent Alert"
+                      style={{
+                        padding: "0.35rem 0.65rem",
+                        borderRadius: "8px",
+                        color: "#25D366",
+                        borderColor: "#25D366",
+                        background: "rgba(37, 211, 102, 0.08)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        textDecoration: "none"
+                      }}
+                    >
+                      <MessageSquare size={13} /> WhatsApp
+                    </a>
+                  )}
                 </div>
               );
             })}
