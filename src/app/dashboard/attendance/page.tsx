@@ -82,17 +82,14 @@ export default function AttendancePage() {
         setLoadingAttendance(true);
         setSaveSuccess(false);
 
-        // Fetch active enrollments in this batch
+        // Fetch enrollments in this batch
         const { data: enrollments, error: enrollError } = await supabase
           .from("enrollments")
           .select(`
             student_id,
-            students (
-              id, full_name, roll_number, parent_name, parent_contact, contact_number, enrollment_status
-            )
+            students (*)
           `)
-          .eq("batch_id", selectedBatchId)
-          .eq("students.enrollment_status", "active");
+          .eq("batch_id", selectedBatchId);
 
         if (enrollError) throw enrollError;
 
@@ -105,10 +102,10 @@ export default function AttendancePage() {
           .eq("academic_year", settings.academic_year);
 
         if (attError) {
-          if (attError.code === "42P01" || attError.message?.includes("relation \"attendance\" does not exist")) {
+          if (attError.code === "42P01" || attError.message?.includes("relation \"attendance\" does not exist") || attError.message?.includes("does not exist")) {
             setTableMissing(true);
           } else {
-            console.error("Error fetching attendance:", attError);
+            console.warn("Notice fetching attendance:", attError.message);
           }
         } else {
           setTableMissing(false);
@@ -120,17 +117,17 @@ export default function AttendancePage() {
         });
 
         const formattedList: StudentAttendance[] = (enrollments || [])
-          .filter(e => e.students)
+          .filter(e => e.students && (e.students as any).enrollment_status !== "inactive")
           .map(e => {
             const student: any = e.students;
             const existing = attendanceMap.get(student.id);
             return {
               student_id: student.id,
-              student_name: student.full_name,
-              roll_number: student.roll_number,
-              parent_name: student.parent_name,
-              parent_contact: student.parent_contact,
-              contact_number: student.contact_number,
+              student_name: student.full_name || "Unknown Student",
+              roll_number: student.roll_number || "",
+              parent_name: student.parent_name || "",
+              parent_contact: student.parent_contact || student.contact_number || "",
+              contact_number: student.contact_number || "",
               status: existing ? existing.status : "present", // Default to present for fast entry
               remarks: existing ? (existing.remarks || "") : "",
               attendance_id: existing ? existing.id : undefined
