@@ -117,26 +117,30 @@ export default function AttendancePage() {
           studentsData = stds || [];
         }
 
-        // 3. Fetch existing attendance records for this date and batch (graceful fallback if table missing)
+        // 3. Fetch existing attendance records for this date and batch (graceful fallback)
         let attendanceMap = new Map<string, any>();
         try {
           const { data: existingAttendance, error: attError } = await supabase
             .from("attendance")
             .select("*")
             .eq("batch_id", selectedBatchId)
-            .eq("date", selectedDate)
-            .eq("academic_year", settings.academic_year);
+            .eq("date", selectedDate);
 
           if (attError) {
-            setTableMissing(true);
+            console.warn("Attendance query notice:", attError);
+            if (attError.code === "42P01" || attError.message?.includes("does not exist") || attError.message?.includes("schema cache")) {
+              setTableMissing(true);
+            } else {
+              setTableMissing(false);
+            }
           } else {
             setTableMissing(false);
             (existingAttendance || []).forEach(att => {
               attendanceMap.set(att.student_id, att);
             });
           }
-        } catch (e) {
-          setTableMissing(true);
+        } catch (e: any) {
+          console.warn("Attendance catch:", e);
         }
 
         // 4. Map into attendance list
@@ -369,9 +373,10 @@ export default function AttendancePage() {
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "var(--danger)" }}>
               <ShieldAlert size={20} /> Supabase Attendance Table Setup Required
             </div>
-            <button
-              onClick={() => {
-                const sqlScript = `-- 1. Create attendance table
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <button
+                  onClick={() => {
+                    const sqlScript = `-- 1. Create attendance table
 CREATE TABLE IF NOT EXISTS public.attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL,
@@ -416,22 +421,31 @@ CREATE INDEX IF NOT EXISTS idx_attendance_student ON public.attendance(student_i
 -- 5. Refresh Supabase API Schema Cache immediately
 NOTIFY pgrst, 'reload schema';`;
 
-                navigator.clipboard.writeText(sqlScript);
-                setCopiedSql(true);
-                setTimeout(() => setCopiedSql(false), 3000);
-              }}
-              className="btn btn-outline"
-              style={{ padding: "0.35rem 0.75rem", fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
-            >
-              {copiedSql ? <Check size={14} style={{ color: "var(--success)" }} /> : <Copy size={14} />}
-              {copiedSql ? "Copied to Clipboard!" : "Copy SQL Script"}
-            </button>
+                    navigator.clipboard.writeText(sqlScript);
+                    setCopiedSql(true);
+                    setTimeout(() => setCopiedSql(false), 3000);
+                  }}
+                  className="btn btn-outline"
+                  style={{ padding: "0.35rem 0.75rem", fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
+                >
+                  {copiedSql ? <Check size={14} style={{ color: "var(--success)" }} /> : <Copy size={14} />}
+                  {copiedSql ? "Copied to Clipboard!" : "Copy SQL Script"}
+                </button>
+                <button
+                  onClick={() => setTableMissing(false)}
+                  className="btn btn-outline"
+                  style={{ padding: "0.35rem 0.55rem", fontSize: "0.8125rem", border: "none" }}
+                  title="Dismiss warning"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <p style={{ fontSize: "0.875rem", margin: "0 0 0.5rem 0", color: "var(--foreground)" }}>
+              The <code>public.attendance</code> table hasn't been created in Supabase yet. Click <strong>"Copy SQL Script"</strong> above, paste it into your <strong>Supabase SQL Editor</strong>, and click <strong>Run</strong>.
+            </p>
           </div>
-          <p style={{ fontSize: "0.875rem", margin: "0 0 0.5rem 0", color: "var(--foreground)" }}>
-            The <code>public.attendance</code> table hasn't been created in Supabase yet. Click <strong>"Copy SQL Script"</strong> above, paste it into your <strong>Supabase SQL Editor</strong>, and click <strong>Run</strong>.
-          </p>
-        </div>
-      )}
+        )}
 
       {/* Controls Bar: Batch, Date, Quick Bulk Actions */}
       <div className="card" style={{ padding: "1.25rem 1.5rem" }}>
