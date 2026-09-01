@@ -82,44 +82,60 @@ export default function AttendancePage() {
         setLoadingAttendance(true);
         setSaveSuccess(false);
 
-        // Fetch enrollments in this batch
+        // 1. Fetch student IDs enrolled in this batch
         const { data: enrollments, error: enrollError } = await supabase
           .from("enrollments")
-          .select(`
-            student_id,
-            students (*)
-          `)
+          .select("student_id")
           .eq("batch_id", selectedBatchId);
 
-        if (enrollError) throw enrollError;
-
-        // Fetch existing attendance records for this date and batch
-        const { data: existingAttendance, error: attError } = await supabase
-          .from("attendance")
-          .select("*")
-          .eq("batch_id", selectedBatchId)
-          .eq("date", selectedDate)
-          .eq("academic_year", settings.academic_year);
-
-        if (attError) {
-          if (attError.code === "42P01" || attError.message?.includes("relation \"attendance\" does not exist") || attError.message?.includes("does not exist")) {
-            setTableMissing(true);
-          } else {
-            console.warn("Notice fetching attendance:", attError.message);
-          }
-        } else {
-          setTableMissing(false);
+        if (enrollError) {
+          console.error("Error fetching enrollments:", enrollError);
+          throw enrollError;
         }
 
-        const attendanceMap = new Map<string, any>();
-        (existingAttendance || []).forEach(att => {
-          attendanceMap.set(att.student_id, att);
-        });
+        const studentIds = (enrollments || []).map(e => e.student_id).filter(Boolean);
 
-        const formattedList: StudentAttendance[] = (enrollments || [])
-          .filter(e => e.students && (e.students as any).enrollment_status !== "inactive")
-          .map(e => {
-            const student: any = e.students;
+        // 2. Fetch student details directly
+        let studentsData: any[] = [];
+        if (studentIds.length > 0) {
+          const { data: stds, error: stdError } = await supabase
+            .from("students")
+            .select("*")
+            .in("id", studentIds);
+
+          if (stdError) {
+            console.error("Error fetching students:", stdError);
+            throw stdError;
+          }
+          studentsData = stds || [];
+        }
+
+        // 3. Fetch existing attendance records for this date and batch (graceful fallback if table missing)
+        let attendanceMap = new Map<string, any>();
+        try {
+          const { data: existingAttendance, error: attError } = await supabase
+            .from("attendance")
+            .select("*")
+            .eq("batch_id", selectedBatchId)
+            .eq("date", selectedDate)
+            .eq("academic_year", settings.academic_year);
+
+          if (attError) {
+            setTableMissing(true);
+          } else {
+            setTableMissing(false);
+            (existingAttendance || []).forEach(att => {
+              attendanceMap.set(att.student_id, att);
+            });
+          }
+        } catch (e) {
+          setTableMissing(true);
+        }
+
+        // 4. Map into attendance list
+        const formattedList: StudentAttendance[] = studentsData
+          .filter(student => student.enrollment_status !== "inactive")
+          .map(student => {
             const existing = attendanceMap.get(student.id);
             return {
               student_id: student.id,
