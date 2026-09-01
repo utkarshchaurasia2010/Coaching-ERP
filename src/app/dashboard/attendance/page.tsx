@@ -5,7 +5,7 @@ import {
   CalendarCheck, Users, CheckCircle2, XCircle, Clock, 
   HelpCircle, Save, Send, MessageSquare, Loader2, ArrowLeft,
   Calendar, Check, AlertCircle, RefreshCw, Search, Filter,
-  CheckCheck, UserX, ShieldAlert
+  CheckCheck, UserX, ShieldAlert, Copy
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/context/SettingsContext";
@@ -42,6 +42,7 @@ export default function AttendancePage() {
   
   const [tableMissing, setTableMissing] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
   
   const [messageTemplate, setMessageTemplate] = useState<string>(
     "Dear Parent, this is to inform you that {StudentName} was marked ABSENT for today's ({Date}) class in {BatchName} at {InstituteName}. Please contact us if you have any questions."
@@ -230,11 +231,10 @@ export default function AttendancePage() {
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err: any) {
       console.error("Error saving attendance:", err);
-      if (err.message?.includes("Could not find the table 'public.attendance'") || err.code === "42P01" || err.message?.includes("does not exist")) {
+      if (err.message?.includes("Could not find the table 'public.attendance'") || err.code === "42P01" || err.message?.includes("does not exist") || err.message?.includes("schema cache")) {
         setTableMissing(true);
-        alert("The 'attendance' table is not created in Supabase yet. Please run the create_attendance_schema.sql script in Supabase SQL editor.");
       } else {
-        alert("Failed to save attendance: " + err.message);
+        alert("Failed to save attendance: " + (err.message || "Unknown error"));
       }
     } finally {
       setSaving(false);
@@ -344,45 +344,92 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Unsaved changes banner */}
+      {/* Unsaved changes banner (single save button remains in the top header) */}
       {hasUnsavedChanges && (
         <div style={{
           background: "rgba(79, 70, 229, 0.08)",
-          border: "1px solid rgba(79, 70, 229, 0.2)",
+          border: "1px solid rgba(79, 70, 229, 0.25)",
           borderRadius: "var(--radius)",
           padding: "0.75rem 1.25rem",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem"
+          gap: "0.75rem"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "var(--primary)", fontWeight: 600 }}>
-            <AlertCircle size={16} />
-            <span>You have unsaved attendance modifications. Don't forget to click Save!</span>
-          </div>
-          <button
-            onClick={handleSaveAttendance}
-            disabled={saving}
-            className="btn btn-primary"
-            style={{ padding: "0.35rem 0.85rem", fontSize: "0.8125rem" }}
-          >
-            {saving ? "Saving..." : "Save Now"}
-          </button>
+          <AlertCircle size={18} style={{ color: "var(--primary)", flexShrink: 0 }} />
+          <span style={{ fontSize: "0.875rem", color: "var(--foreground)", fontWeight: 500 }}>
+            You have unsaved attendance changes. Click the <strong>"Save Changes *"</strong> button in the top right to store them.
+          </span>
         </div>
       )}
 
       {/* Database Setup Warning if table does not exist */}
       {tableMissing && (
         <div className="card" style={{ border: "1px solid var(--danger)", background: "rgba(225, 29, 72, 0.04)", padding: "1.25rem 1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "var(--danger)", marginBottom: "0.5rem" }}>
-            <ShieldAlert size={20} /> Supabase Attendance Table Setup Required
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "var(--danger)" }}>
+              <ShieldAlert size={20} /> Supabase Attendance Table Setup Required
+            </div>
+            <button
+              onClick={() => {
+                const sqlScript = `-- 1. Create attendance table
+CREATE TABLE IF NOT EXISTS public.attendance (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL,
+    batch_id UUID NOT NULL,
+    date DATE NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('present', 'absent', 'late', 'excused')),
+    remarks TEXT,
+    academic_year TEXT NOT NULL,
+    marked_by UUID,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (student_id, batch_id, date)
+);
+
+-- 2. Add foreign keys safely
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'students') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'attendance_student_id_fkey') THEN
+            ALTER TABLE public.attendance 
+            ADD CONSTRAINT attendance_student_id_fkey 
+            FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+        END IF;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'batches') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'attendance_batch_id_fkey') THEN
+            ALTER TABLE public.attendance 
+            ADD CONSTRAINT attendance_batch_id_fkey 
+            FOREIGN KEY (batch_id) REFERENCES public.batches(id) ON DELETE CASCADE;
+        END IF;
+    END IF;
+END $$;
+
+-- 3. Explicitly DISABLE Row Level Security
+ALTER TABLE public.attendance DISABLE ROW LEVEL SECURITY;
+
+-- 4. Indexes for fast queries
+CREATE INDEX IF NOT EXISTS idx_attendance_batch_date ON public.attendance(batch_id, date);
+CREATE INDEX IF NOT EXISTS idx_attendance_student ON public.attendance(student_id);
+
+-- 5. Refresh Supabase API Schema Cache immediately
+NOTIFY pgrst, 'reload schema';`;
+
+                navigator.clipboard.writeText(sqlScript);
+                setCopiedSql(true);
+                setTimeout(() => setCopiedSql(false), 3000);
+              }}
+              className="btn btn-outline"
+              style={{ padding: "0.35rem 0.75rem", fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              {copiedSql ? <Check size={14} style={{ color: "var(--success)" }} /> : <Copy size={14} />}
+              {copiedSql ? "Copied to Clipboard!" : "Copy SQL Script"}
+            </button>
           </div>
-          <p style={{ fontSize: "0.875rem", margin: "0 0 0.75rem 0", color: "var(--foreground)" }}>
-            The <code>public.attendance</code> table hasn't been created in Supabase yet. Please execute the SQL migration script in your Supabase SQL Editor:
+          <p style={{ fontSize: "0.875rem", margin: "0 0 0.5rem 0", color: "var(--foreground)" }}>
+            The <code>public.attendance</code> table hasn't been created in Supabase yet. Click <strong>"Copy SQL Script"</strong> above, paste it into your <strong>Supabase SQL Editor</strong>, and click <strong>Run</strong>.
           </p>
-          <div style={{ background: "var(--background)", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "0.8125rem", fontFamily: "monospace", overflowX: "auto" }}>
-            Open <code>create_attendance_schema.sql</code> in your project root and run it in Supabase SQL Editor.
-          </div>
         </div>
       )}
 
