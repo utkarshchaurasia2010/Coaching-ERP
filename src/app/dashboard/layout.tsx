@@ -16,7 +16,8 @@ import {
   BookOpen,
   IndianRupee,
   Award,
-  Megaphone
+  Megaphone,
+  CalendarCheck
 } from "lucide-react";
 import { SettingsProvider, useSettings } from "@/context/SettingsContext";
 import { FormDirtyProvider, useFormDirty } from "@/context/FormDirtyContext";
@@ -149,6 +150,7 @@ function DashboardLayout({
           <SidebarItem icon={<BookOpen size={20} />} label="Batches" href="/dashboard/batches" active={pathname.startsWith('/dashboard/batches')} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<Award size={20} />} label="Academics" href="/dashboard/academics/exams" active={pathname.startsWith('/dashboard/academics')} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<Calendar size={20} />} label="Schedule" href="/dashboard/schedule" active={pathname.startsWith('/dashboard/schedule')} onClick={() => setSidebarOpen(false)} />
+          <SidebarItem icon={<CalendarCheck size={20} />} label="Attendance" href="/dashboard/attendance" active={pathname.startsWith('/dashboard/attendance')} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<Megaphone size={20} />} label="Notices" href="/dashboard/notices" active={pathname.startsWith('/dashboard/notices')} onClick={() => setSidebarOpen(false)} />
           
           {(userRole === 'admin' || userRole === 'teacher') && (

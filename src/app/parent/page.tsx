@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import {
   Calendar, IndianRupee, Loader2, Clock, CheckCircle, User,
   BookOpen, MapPin, Phone, Mail, GraduationCap, Users, AlertCircle,
-  ChevronDown, ChevronUp, Pencil, Save, X, Award, BarChart3, Download, Megaphone
+  ChevronDown, ChevronUp, Pencil, Save, X, Award, BarChart3, Download, Megaphone,
+  CalendarCheck
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -16,7 +17,8 @@ export default function ParentDashboard() {
   const [student, setStudent] = useState<any>(null);
   const [fees, setFees] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<"profile" | "academics" | "fees" | "schedule" | "notices">("notices");
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"profile" | "academics" | "fees" | "schedule" | "notices" | "attendance">("notices");
   const [examResults, setExamResults] = useState<any[]>([]);
   const [notices, setNotices] = useState<any[]>([]);
   const [expandedFee, setExpandedFee] = useState<string | null>(null);
@@ -120,6 +122,16 @@ export default function ParentDashboard() {
         
         const { data: noticesData } = await noticesQuery.order('created_at', { ascending: false });
         if (noticesData) setNotices(noticesData);
+
+        // 6. Attendance records
+        const { data: attendanceData } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('student_id', studentId)
+          .eq('academic_year', settings.academic_year)
+          .order('date', { ascending: false });
+
+        if (attendanceData) setAttendance(attendanceData);
 
       } catch (error) {
         console.error("Error fetching parent data", error);
@@ -282,12 +294,20 @@ export default function ParentDashboard() {
   // Batch info
   const batch = student?.enrollments?.[0]?.batches;
 
+  // Attendance metrics
+  const totalAttendanceDays = attendance.length;
+  const presentDays = attendance.filter(a => a.status === 'present').length;
+  const absentDays = attendance.filter(a => a.status === 'absent').length;
+  const lateDays = attendance.filter(a => a.status === 'late').length;
+  const attendancePercentage = totalAttendanceDays > 0 ? Math.round(((presentDays + lateDays) / totalAttendanceDays) * 100) : 100;
+
   const tabs = [
     { key: "notices" as const, label: "Notices", icon: <Megaphone size={16} /> },
-    { key: "profile" as const, label: "Profile", icon: <User size={16} /> },
+    { key: "attendance" as const, label: "Attendance", icon: <CalendarCheck size={16} /> },
     { key: "academics" as const, label: "Academics", icon: <Award size={16} /> },
     { key: "fees" as const, label: "Fees", icon: <IndianRupee size={16} /> },
     { key: "schedule" as const, label: "Schedule", icon: <Calendar size={16} /> },
+    { key: "profile" as const, label: "Profile", icon: <User size={16} /> },
   ];
 
   return (
@@ -822,6 +842,124 @@ export default function ParentDashboard() {
                           )}
                         </div>
                       )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* === ATTENDANCE TAB === */}
+      {activeTab === "attendance" && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Attendance KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
+            <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary)', padding: '0.5rem', borderRadius: '50%', marginBottom: '0.5rem' }}>
+                <CalendarCheck size={20} />
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Attendance Rate</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{attendancePercentage}%</div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(5, 150, 105, 0.1)', color: 'var(--success)', padding: '0.5rem', borderRadius: '50%', marginBottom: '0.5rem' }}>
+                <CheckCircle size={20} />
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Present Days</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>{presentDays}</div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(225, 29, 72, 0.1)', color: 'var(--danger)', padding: '0.5rem', borderRadius: '50%', marginBottom: '0.5rem' }}>
+                <AlertCircle size={20} />
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Absent Days</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>{absentDays}</div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(217, 119, 6, 0.1)', color: 'var(--warning)', padding: '0.5rem', borderRadius: '50%', marginBottom: '0.5rem' }}>
+                <Clock size={20} />
+              </div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Late / Excused</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--warning)', marginTop: '0.25rem' }}>{lateDays}</div>
+            </div>
+          </div>
+
+          {/* Attendance History Card */}
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CalendarCheck size={18} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--foreground)' }}>Attendance History</h3>
+              </div>
+              <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                {totalAttendanceDays} session{totalAttendanceDays !== 1 ? 's' : ''} recorded
+              </span>
+            </div>
+
+            {attendance.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <CalendarCheck size={36} style={{ opacity: 0.2, margin: '0 auto 0.75rem' }} />
+                <p>No attendance records found for this academic year.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {attendance.map((att, idx) => {
+                  const isPresent = att.status === 'present';
+                  const isAbsent = att.status === 'absent';
+                  const isLate = att.status === 'late';
+                  
+                  const badgeColor = isPresent ? 'var(--success)' : isAbsent ? 'var(--danger)' : 'var(--warning)';
+                  const badgeBg = isPresent ? 'rgba(5, 150, 105, 0.1)' : isAbsent ? 'rgba(225, 29, 72, 0.1)' : 'rgba(217, 119, 6, 0.1)';
+
+                  return (
+                    <div
+                      key={att.id || idx}
+                      style={{
+                        padding: '1rem 1.5rem',
+                        borderBottom: idx < attendance.length - 1 ? '1px solid var(--border)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '1rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '50%',
+                          background: badgeBg, color: badgeColor,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          {isPresent ? <CheckCircle size={16} /> : isAbsent ? <AlertCircle size={16} /> : <Clock size={16} />}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--foreground)' }}>
+                            {new Date(att.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                          {att.remarks && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '0.125rem' }}>
+                              "{att.remarks}"
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <span style={{
+                        background: badgeBg,
+                        color: badgeColor,
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em'
+                      }}>
+                        {att.status}
+                      </span>
                     </div>
                   );
                 })}
