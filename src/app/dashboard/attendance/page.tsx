@@ -40,7 +40,6 @@ export default function AttendancePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "present" | "absent" | "late" | "excused">("all");
   
-  const [tableMissing, setTableMissing] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   
@@ -126,21 +125,13 @@ export default function AttendancePage() {
             .eq("batch_id", selectedBatchId)
             .eq("date", selectedDate);
 
-          if (attError) {
-            console.warn("Attendance query notice:", attError);
-            if (attError.code === "42P01" || attError.message?.includes("does not exist") || attError.message?.includes("schema cache")) {
-              setTableMissing(true);
-            } else {
-              setTableMissing(false);
-            }
-          } else {
-            setTableMissing(false);
+          if (!attError) {
             (existingAttendance || []).forEach(att => {
               attendanceMap.set(att.student_id, att);
             });
           }
         } catch (e: any) {
-          console.warn("Attendance catch:", e);
+          // graceful fallback
         }
 
         // 4. Map into attendance list
@@ -229,16 +220,15 @@ export default function AttendancePage() {
 
       if (error) throw error;
 
-      setTableMissing(false);
       setHasUnsavedChanges(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err: any) {
-      console.error("Error saving attendance:", err);
-      if (err.message?.includes("Could not find the table 'public.attendance'") || err.code === "42P01" || err.message?.includes("does not exist") || err.message?.includes("schema cache")) {
-        setTableMissing(true);
+      const errMsg = err?.message || JSON.stringify(err) || "Unknown error";
+      if (errMsg.includes("Could not find the table 'public.attendance'") || err?.code === "42P01" || errMsg.includes("does not exist") || errMsg.includes("schema cache")) {
+        alert("The 'attendance' table is missing or the Supabase schema cache is stale. Please create the table in Supabase and run: NOTIFY pgrst, 'reload schema';");
       } else {
-        alert("Failed to save attendance: " + (err.message || "Unknown error"));
+        alert("Failed to save attendance: " + errMsg);
       }
     } finally {
       setSaving(false);
