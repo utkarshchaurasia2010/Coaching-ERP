@@ -147,11 +147,11 @@ function DashboardLayout({
         <nav style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', overflowY: 'auto' }}>
           <SidebarItem icon={<LayoutDashboard size={20} />} label="Dashboard" href="/dashboard" active={pathname === '/dashboard'} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<Users size={20} />} label="Students" href="/dashboard/students" active={pathname.startsWith('/dashboard/students')} onClick={() => setSidebarOpen(false)} />
-          <SidebarItem icon={<BookOpen size={20} />} label="Batches" href="/dashboard/batches" active={pathname.startsWith('/dashboard/batches')} onClick={() => setSidebarOpen(false)} />
-          <SidebarItem icon={<Award size={20} />} label="Academics" href="/dashboard/academics/exams" active={pathname.startsWith('/dashboard/academics')} onClick={() => setSidebarOpen(false)} />
-          <SidebarItem icon={<Calendar size={20} />} label="Schedule" href="/dashboard/schedule" active={pathname.startsWith('/dashboard/schedule')} onClick={() => setSidebarOpen(false)} />
+          <SidebarItem icon={<BookOpen size={20} />} label="Classes & Sections" href="/dashboard/classes" active={pathname.startsWith('/dashboard/classes') || pathname.startsWith('/dashboard/batches')} onClick={() => setSidebarOpen(false)} />
           <SidebarItem icon={<CalendarCheck size={20} />} label="Attendance" href="/dashboard/attendance" active={pathname.startsWith('/dashboard/attendance')} onClick={() => setSidebarOpen(false)} />
-          <SidebarItem icon={<Megaphone size={20} />} label="Notices" href="/dashboard/notices" active={pathname.startsWith('/dashboard/notices')} onClick={() => setSidebarOpen(false)} />
+          <SidebarItem icon={<Award size={20} />} label="Academics & Exams" href="/dashboard/academics/exams" active={pathname.startsWith('/dashboard/academics')} onClick={() => setSidebarOpen(false)} />
+          <SidebarItem icon={<Calendar size={20} />} label="Timetable" href="/dashboard/schedule" active={pathname.startsWith('/dashboard/schedule')} onClick={() => setSidebarOpen(false)} />
+          <SidebarItem icon={<Megaphone size={20} />} label="School Diary" href="/dashboard/diary" active={pathname.startsWith('/dashboard/diary') || pathname.startsWith('/dashboard/notices')} onClick={() => setSidebarOpen(false)} />
           
           {(userRole === 'admin' || userRole === 'teacher') && (
             <SidebarItem icon={<IndianRupee size={20} />} label="Financials" href="/dashboard/financials" active={pathname.startsWith('/dashboard/financials')} onClick={() => setSidebarOpen(false)} />
@@ -159,7 +159,7 @@ function DashboardLayout({
 
           {userRole === 'admin' && (
             <>
-              <SidebarItem icon={<GraduationCap size={20} />} label="Staff" href="/dashboard/staff" active={pathname.startsWith('/dashboard/staff')} onClick={() => setSidebarOpen(false)} />
+              <SidebarItem icon={<GraduationCap size={20} />} label="Teachers & Staff" href="/dashboard/staff" active={pathname.startsWith('/dashboard/staff')} onClick={() => setSidebarOpen(false)} />
               <SidebarItem icon={<Settings size={20} />} label="Settings" href="/dashboard/settings" active={pathname.startsWith('/dashboard/settings')} onClick={() => setSidebarOpen(false)} />
             </>
           )}

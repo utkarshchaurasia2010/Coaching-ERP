@@ -26,13 +26,18 @@ export default function NewStudentPage() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    admissionNo: "",
+    rollNo: "",
     email: "",
     phone: "",
     dateOfBirth: "",
     gender: "",
+    bloodGroup: "",
     address: "",
     parentName: "",
+    motherName: "",
     parentContact: "",
+    emergencyContact: "",
     previousSchool: "",
     board: "",
     previousGrades: "",
@@ -109,18 +114,25 @@ export default function NewStudentPage() {
         uploadedPhotoUrl = publicUrlData.publicUrl;
       }
 
+      const generatedAdmNo = formData.admissionNo || `ADM-${Date.now().toString().slice(-6)}`;
+
       const { data: studentData, error: studentError } = await supabase
         .from('students')
         .insert([
           { 
             full_name: fullName, 
+            admission_no: generatedAdmNo,
+            roll_no: formData.rollNo ? parseInt(formData.rollNo) : null,
             email: formData.email, 
             contact_number: formData.phone,
             date_of_birth: formData.dateOfBirth || null,
             gender: formData.gender || null,
+            blood_group: formData.bloodGroup || null,
             address: formData.address || null,
             parent_name: formData.parentName || null,
+            mother_name: formData.motherName || null,
             parent_contact: formData.parentContact || null,
+            emergency_contact: formData.emergencyContact || null,
             previous_school: formData.previousSchool || null,
             board: formData.board || null,
             previous_grades: formData.previousGrades || null,
@@ -128,7 +140,7 @@ export default function NewStudentPage() {
             photo_url: uploadedPhotoUrl,
             family_id: formData.familyId || null,
             enrollment_status: 'active',
-            academic_year: settings?.academic_year || '2025-26'
+            academic_year: settings?.academic_year || '2026-27'
           }
         ])
         .select()
@@ -229,6 +241,32 @@ export default function NewStudentPage() {
             </div>
 
             <div className="form-grid-2">
+              <div className="input-group">
+                <label>Admission No. (Auto or Custom)</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div className="input-icon" style={{ top: '50%', transform: 'translateY(-50%)' }}><GraduationCap size={16} /></div>
+                  <input 
+                    type="text" 
+                    className="input" 
+                    placeholder="e.g. ADM-2026-001" 
+                    value={formData.admissionNo}
+                    onChange={e => setFormData({...formData, admissionNo: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="input-group">
+                <label>Roll Number</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div className="input-icon" style={{ top: '50%', transform: 'translateY(-50%)' }}><BookOpen size={16} /></div>
+                  <input 
+                    type="number" 
+                    className="input" 
+                    placeholder="e.g. 15" 
+                    value={formData.rollNo}
+                    onChange={e => setFormData({...formData, rollNo: e.target.value})}
+                  />
+                </div>
+              </div>
               <div className="input-group">
                 <label>First Name *</label>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -394,7 +432,7 @@ export default function NewStudentPage() {
               </p>
             </div>
             <div className="input-group">
-              <label>Parent / Guardian Name *</label>
+              <label>Father / Guardian Name *</label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <div className="input-icon" style={{ top: '50%', transform: 'translateY(-50%)' }}><User size={16} /></div>
                 <input 
@@ -404,6 +442,19 @@ export default function NewStudentPage() {
                   required
                   value={formData.parentName}
                   onChange={e => setFormData({...formData, parentName: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="input-group">
+              <label>Mother's Name</label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <div className="input-icon" style={{ top: '50%', transform: 'translateY(-50%)' }}><User size={16} /></div>
+                <input 
+                  type="text" 
+                  className="input" 
+                  placeholder="e.g. Jane Doe" 
+                  value={formData.motherName}
+                  onChange={e => setFormData({...formData, motherName: e.target.value})}
                 />
               </div>
             </div>
