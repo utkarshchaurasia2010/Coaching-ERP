@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Search, BookOpen, Users, Edit2, Trash2, Loader2, School, DoorOpen } from "lucide-react";
+import { Plus, Search, Users, Edit2, Loader2, School, DoorOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/context/SettingsContext";
 
 export default function ClassesPage() {
   const { settings } = useSettings();
-  const [classes, setClasses] = useState<any[]>([]);
-  const [sections, setSections] = useState<any[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -23,48 +23,29 @@ export default function ClassesPage() {
     try {
       setLoading(true);
 
-      // Fetch classes
-      let { data: classData, error: classErr } = await supabase
-        .from('classes')
+      // Fetch all class sections from unified batches table
+      const { data: batchData, error: batchErr } = await supabase
+        .from('batches')
         .select('*')
         .eq('academic_year', settings!.academic_year)
-        .order('numeric_grade', { ascending: true });
+        .order('name');
 
-      // If classes table doesn't have rows yet, fallback/check batches for seamless compatibility
-      if (!classData || classData.length === 0) {
-        const { data: batchData } = await supabase
-          .from('batches')
-          .select('*')
-          .eq('academic_year', settings!.academic_year)
-          .order('name');
-        
-        if (batchData && batchData.length > 0) {
-          // Map batches to simulated classes so existing data shows seamlessly
-          classData = batchData.map((b, idx) => ({
-            id: b.id,
-            name: b.name,
-            numeric_grade: idx + 1,
-            stream: 'General',
-            academic_year: b.academic_year,
-            isBatchFallback: true,
-            max_capacity: b.max_capacity
-          }));
-        }
+      if (batchErr) throw batchErr;
+      const currentBatches = batchData || [];
+      setBatches(currentBatches);
+
+      // Fetch student counts for each class section
+      if (currentBatches.length > 0) {
+        const { data: enrollData } = await supabase
+          .from('enrollments')
+          .select('batch_id');
+
+        const counts: Record<string, number> = {};
+        (enrollData || []).forEach(e => {
+          counts[e.batch_id] = (counts[e.batch_id] || 0) + 1;
+        });
+        setEnrollmentCounts(counts);
       }
-
-      setClasses(classData || []);
-
-      // Fetch sections with class details and student counts
-      const { data: sectionData } = await supabase
-        .from('sections')
-        .select(`
-          *,
-          classes (name, numeric_grade),
-          users:class_teacher_id (full_name)
-        `)
-        .eq('academic_year', settings!.academic_year);
-
-      setSections(sectionData || []);
 
     } catch (err) {
       console.error("Error loading classes:", err);
@@ -73,9 +54,19 @@ export default function ClassesPage() {
     }
   };
 
-  const filteredClasses = classes.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.stream && c.stream.toLowerCase().includes(searchQuery.toLowerCase()))
+  // Group sections by Class / Grade Name
+  const groupedClasses: Record<string, any[]> = {};
+  batches.forEach(b => {
+    const className = b.class_name || b.name.split('-')[0].trim() || b.name;
+    if (!groupedClasses[className]) {
+      groupedClasses[className] = [];
+    }
+    groupedClasses[className].push(b);
+  });
+
+  const filteredClassNames = Object.keys(groupedClasses).filter(className =>
+    className.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    groupedClasses[className].some(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -101,7 +92,7 @@ export default function ClassesPage() {
         <input 
           type="text" 
           className="input" 
-          placeholder="Search classes..." 
+          placeholder="Search classes or sections..." 
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
         />
@@ -112,21 +103,23 @@ export default function ClassesPage() {
         <div style={{ padding: '3rem', textAlign: 'center' }}>
           <Loader2 className="animate-spin text-muted" size={32} style={{ margin: '0 auto' }} />
         </div>
-      ) : filteredClasses.length === 0 ? (
+      ) : filteredClassNames.length === 0 ? (
         <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           <School size={48} style={{ margin: '0 auto 1rem', opacity: 0.2 }} />
-          <h3>No Classes Configured</h3>
-          <p style={{ marginTop: '0.5rem' }}>Create your first school class (e.g., Class 1, Class 10, Kindergarten).</p>
+          <h3>No Classes Found</h3>
+          <p style={{ marginTop: '0.5rem' }}>Create your first school class (e.g. Class 10, Class 6, Nursery).</p>
           <Link href="/dashboard/classes/new" className="btn btn-primary" style={{ marginTop: '1.5rem', display: 'inline-flex', gap: '0.5rem', textDecoration: 'none' }}>
             <Plus size={18} /> Add New Class
           </Link>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-          {filteredClasses.map((cls) => {
-            const classSections = sections.filter(s => s.class_id === cls.id);
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+          {filteredClassNames.map(className => {
+            const sections = groupedClasses[className];
+            const totalEnrolled = sections.reduce((sum, s) => sum + (enrollmentCounts[s.id] || 0), 0);
+
             return (
-              <div key={cls.id} className="card animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div key={className} className="card animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -134,47 +127,54 @@ export default function ClassesPage() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: 'var(--foreground)' }}>
-                        {cls.name}
+                        {className}
                       </h3>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                        Stream: {cls.stream || 'General'}
+                        {sections.length} Section{sections.length > 1 ? 's' : ''} &bull; {totalEnrolled} Students
                       </span>
                     </div>
                   </div>
-                  <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', background: 'var(--surface-solid)', border: '1px solid var(--border)', fontWeight: 600 }}>
-                    Grade {cls.numeric_grade}
-                  </span>
                 </div>
 
-                {/* Sections List */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                    Sections ({classSections.length > 0 ? classSections.length : '1 Standard'})
+                {/* Section Cards */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    Division Sections
                   </div>
-                  {classSections.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {classSections.map(sec => (
-                        <div key={sec.id} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.35rem 0.65rem', borderRadius: '6px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '0.8125rem' }}>
-                          <DoorOpen size={14} style={{ color: 'var(--primary)' }} />
-                          <span style={{ fontWeight: 600 }}>Sec {sec.name}</span>
-                          {sec.room_no && <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>({sec.room_no})</span>}
+                  {sections.map(sec => {
+                    const enrolled = enrollmentCounts[sec.id] || 0;
+                    const maxCap = sec.max_capacity || 40;
+
+                    return (
+                      <div key={sec.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', fontSize: '0.8125rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <DoorOpen size={16} style={{ color: 'var(--primary)' }} />
+                          <div>
+                            <span style={{ fontWeight: 600 }}>{sec.name}</span>
+                            {sec.room_no && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.35rem' }}>({sec.room_no})</span>}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      Section A (Standard Division)
-                    </div>
-                  )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            <Users size={12} style={{ display: 'inline', marginRight: '3px' }} />
+                            {enrolled} / {maxCap}
+                          </span>
+                          <Link href={`/dashboard/batches/${sec.id}/edit`} className="btn btn-outline" style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', textDecoration: 'none' }} title="Edit Section">
+                            <Edit2 size={12} />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Bottom Actions */}
+                {/* Quick Actions */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-                  <Link href={`/dashboard/attendance?classId=${cls.id}`} style={{ fontSize: '0.8125rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
+                  <Link href={`/dashboard/attendance?classId=${sections[0].id}`} style={{ fontSize: '0.8125rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
                     Take Attendance &rarr;
                   </Link>
-                  <Link href={`/dashboard/classes/new?editClass=${cls.id}`} className="btn btn-outline" style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none' }}>
-                    <Edit2 size={13} /> Edit
+                  <Link href={`/dashboard/classes/new?className=${encodeURIComponent(className)}`} style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+                    + Add Section
                   </Link>
                 </div>
               </div>

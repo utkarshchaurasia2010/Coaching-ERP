@@ -521,12 +521,19 @@ export default function NewStudentPage() {
             </div>
             
             <div className="input-group">
-              <label>Assign Class / Batch</label>
+              <label>Assign Class & Section *</label>
               <CustomSelect
                 options={batches.map(b => ({ value: b.id, label: b.name }))}
                 value={formData.batchId}
-                onChange={(val) => setFormData({...formData, batchId: val})}
-                placeholder="Select a batch (Optional)"
+                onChange={(val) => {
+                  const selectedBatch = batches.find(b => b.id === val);
+                  setFormData({
+                    ...formData, 
+                    batchId: val,
+                    currentClass: selectedBatch ? (selectedBatch.class_name || selectedBatch.name) : formData.currentClass
+                  });
+                }}
+                placeholder="Select Class & Section..."
               />
             </div>
           </div>
